@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123a45">
+  <title>Sree Chaitanya International School</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#home" aria-label="Sree Chaitanya International School home">
+      <span class="brand-mark" aria-hidden="true">SC</span>
+      <span class="brand-name">Sree Chaitanya <small>International School</small></span>
+    </a>
+    <nav class="main-nav" aria-label="Main navigation">
+      <a class="nav-link active" href="#home"><span aria-hidden="true">⌂</span> Home</a>
+      <a class="nav-link" href="#register"><span aria-hidden="true">＋</span> Register</a>
+      <a class="nav-link" href="#student-info"><span aria-hidden="true">⌕</span> Student info</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="home">
+      <div class="hero-content">
+        <p class="eyebrow">LEARN · LEAD · SHINE</p>
+        <h1>A bright start<br>for a brilliant future.</h1>
+        <p class="hero-copy">A caring community where every student's curiosity, confidence and potential can grow.</p>
+        <div class="hero-actions">
+          <a class="button button-gold" href="#register">Register a student <span aria-hidden="true">→</span></a>
+          <a class="button button-ghost" href="#student-info">Check student details</a>
+        </div>
+      </div>
+      <div class="hero-caption"><span class="caption-dot"></span> Growing curious minds every day</div>
+    </section>
+
+    <section class="welcome section-wrap">
+      <div>
+        <p class="eyebrow eyebrow-green">WELCOME TO OUR SCHOOL</p>
+        <h2>Every learner has a story.<br><em>Let's help it flourish.</em></h2>
+      </div>
+      <p class="welcome-copy">Explore a simple school portal demo. Register a student to create a sample hall ticket and marks, or look up a student already in our demo records.</p>
+    </section>
+
+    <section class="portal section-wrap" aria-label="Student portal">
+      <article class="portal-card" id="register">
+        <div class="card-icon" aria-hidden="true">✎</div>
+        <p class="eyebrow eyebrow-green">NEW ADMISSION</p>
+        <h2>Student registration</h2>
+        <p class="card-intro">Add a student's details and create a demo hall ticket with sample marks.</p>
+        <form id="registration-form" class="form-grid">
+          <label>First name<input name="first_name" autocomplete="given-name" maxlength="80" required></label>
+          <label>Last name<input name="last_name" autocomplete="family-name" maxlength="80" required></label>
+          <label class="full-width">Address<input name="address" autocomplete="street-address" maxlength="300" required></label>
+          <label class="full-width">Phone number<input name="phone" type="tel" autocomplete="tel" maxlength="32" required></label>
+          <button class="button button-dark full-width" type="submit">Register student <span aria-hidden="true">→</span></button>
+        </form>
+        <div id="registration-result" class="result" aria-live="polite"></div>
+      </article>
+
+      <article class="portal-card" id="student-info">
+        <div class="card-icon card-icon-blue" aria-hidden="true">⌕</div>
+        <p class="eyebrow eyebrow-blue">STUDENT PORTAL</p>
+        <h2>Student information</h2>
+        <p class="card-intro">Enter a student's name to see their hall ticket, contact details and recent exam marks.</p>
+        <form id="lookup-form" class="form-grid lookup-grid">
+          <label>First name<input name="first_name" autocomplete="given-name" maxlength="80" required></label>
+          <label>Last name<input name="last_name" autocomplete="family-name" maxlength="80" required></label>
+          <button class="button button-blue full-width" type="submit">Find student <span aria-hidden="true">→</span></button>
+        </form>
+        <div id="lookup-result" class="result" aria-live="polite"></div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a class="brand footer-brand" href="#home">
+      <span class="brand-mark" aria-hidden="true">SC</span>
+      <span class="brand-name">Sree Chaitanya <small>International School</small></span>
+    </a>
+    <p>Learning today, leading tomorrow.</p>
+    <span class="demo-note">CLASSROOM DEMO · SAMPLE STUDENT DATA</span>
+  </footer>
+</body>
+</html>

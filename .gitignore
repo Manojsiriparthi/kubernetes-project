@@ -1,0 +1,13 @@
+infra/.terraform/
+infra/**/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.*
+infra/**/terraform.tfstate
+infra/**/terraform.tfstate.*
+infra/terraform.tfvars
+infra/backend.hcl
+infra/*.tfplan
+infra/addons/terraform.tfvars
+infra/addons/*.tfplan
+__pycache__/
+*.py[cod]

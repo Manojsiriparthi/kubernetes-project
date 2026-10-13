@@ -1,0 +1,29 @@
+region                               = "us-east-1"
+project_name                         = "school-demo"
+environment                          = "production"
+availability_zone_count              = 3
+kubernetes_version                   = "1.35"
+cluster_endpoint_public_access_cidrs = ["203.0.113.10/32"]
+cluster_log_retention_days           = 90
+node_volume_size_gib                 = 80
+
+public_node_group = {
+  instance_types = ["m7i.large"]
+  min_size       = 3
+  desired_size   = 3
+  max_size       = 6
+}
+
+application_node_group = {
+  instance_types = ["m7i.large"]
+  min_size       = 3
+  desired_size   = 3
+  max_size       = 9
+}
+
+database_node_group = {
+  instance_types = ["m7i.large"]
+  min_size       = 3
+  desired_size   = 3
+  max_size       = 6
+}
