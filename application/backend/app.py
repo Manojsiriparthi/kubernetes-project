@@ -1,5 +1,6 @@
 import os
 import random
+import threading
 import psycopg
 from flask import Flask, jsonify, request
 from psycopg.rows import dict_row
@@ -9,18 +10,49 @@ app = Flask(__name__)
 
 SUBJECTS = ("Telugu", "English", "Maths", "Science", "Social")
 DATABASE_URL = os.environ["DATABASE_URL"]
+schema_migrated = False
+schema_migration_lock = threading.Lock()
 
 
 def connect():
     return psycopg.connect(DATABASE_URL, connect_timeout=3, row_factory=dict_row)
 
 
+def ensure_student_schema(connection):
+    global schema_migrated
+
+    if schema_migrated:
+        return
+
+    with schema_migration_lock:
+        if schema_migrated:
+            return
+        connection.execute(
+            """
+            ALTER TABLE students
+                ADD COLUMN IF NOT EXISTS class_name VARCHAR(32) NOT NULL DEFAULT 'Unknown',
+                ADD COLUMN IF NOT EXISTS father_phone VARCHAR(32) NOT NULL DEFAULT 'Not provided'
+            """
+        )
+        connection.execute(
+            """
+            ALTER TABLE students
+                ALTER COLUMN class_name DROP DEFAULT,
+                ALTER COLUMN father_phone DROP DEFAULT
+            """
+        )
+        connection.commit()
+        schema_migrated = True
+
+
 def student_record(row):
     return {
         "first_name": row["first_name"],
         "last_name": row["last_name"],
+        "class_name": row["class_name"],
         "address": row["address"],
         "phone": row["phone"],
+        "father_phone": row["father_phone"],
         "hall_ticket": row["hall_ticket"],
         "recent_exam": row["recent_exam"],
         "marks": row["marks"],
@@ -37,6 +69,7 @@ def live():
 def ready():
     try:
         with connect() as connection:
+            ensure_student_schema(connection)
             connection.execute("SELECT 1")
         return jsonify(status="ready")
     except psycopg.Error:
@@ -47,19 +80,24 @@ def ready():
 def find_students():
     first_name = request.args.get("first_name", "").strip()
     last_name = request.args.get("last_name", "").strip()
-    if not first_name or not last_name:
-        return jsonify(error="Enter both first and last name."), 400
+    class_name = request.args.get("class_name", "").strip()
+    if not first_name or not last_name or not class_name:
+        return jsonify(error="Enter first name, last name, and class."), 400
 
     try:
         with connect() as connection:
+            ensure_student_schema(connection)
             rows = connection.execute(
                 """
-                SELECT first_name, last_name, address, phone, hall_ticket, recent_exam, marks
+                SELECT first_name, last_name, class_name, address, phone, father_phone,
+                       hall_ticket, recent_exam, marks
                 FROM students
-                WHERE lower(first_name) = lower(%s) AND lower(last_name) = lower(%s)
+                WHERE lower(first_name) = lower(%s)
+                  AND lower(last_name) = lower(%s)
+                  AND lower(class_name) = lower(%s)
                 ORDER BY id
                 """,
-                (first_name, last_name),
+                (first_name, last_name, class_name),
             ).fetchall()
         return jsonify(students=[student_record(row) for row in rows])
     except psycopg.Error:
@@ -73,17 +111,19 @@ def register_student():
     if not isinstance(payload, dict):
         return jsonify(error="Submit registration details as JSON."), 400
 
-    fields = ("first_name", "last_name", "address", "phone")
+    fields = ("first_name", "last_name", "class_name", "address", "phone", "father_phone")
     values = {field: str(payload.get(field, "")).strip() for field in fields}
     if any(not values[field] for field in fields):
         return jsonify(error="Complete every registration field."), 400
     if any(len(values[field]) > limit for field, limit in (
-        ("first_name", 80), ("last_name", 80), ("address", 300), ("phone", 32)
+        ("first_name", 80), ("last_name", 80), ("class_name", 32),
+        ("address", 300), ("phone", 32), ("father_phone", 32)
     )):
         return jsonify(error="One or more fields are too long."), 400
 
     try:
         with connect() as connection:
+            ensure_student_schema(connection)
             ticket_number = connection.execute(
                 "SELECT nextval('hall_ticket_seq')"
             ).fetchone()["nextval"]
@@ -92,15 +132,19 @@ def register_student():
             row = connection.execute(
                 """
                 INSERT INTO students
-                    (first_name, last_name, address, phone, hall_ticket, recent_exam, marks)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING first_name, last_name, address, phone, hall_ticket, recent_exam, marks
+                    (first_name, last_name, class_name, address, phone, father_phone,
+                     hall_ticket, recent_exam, marks)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING first_name, last_name, class_name, address, phone, father_phone,
+                          hall_ticket, recent_exam, marks
                 """,
                 (
                     values["first_name"],
                     values["last_name"],
+                    values["class_name"],
                     values["address"],
                     values["phone"],
+                    values["father_phone"],
                     hall_ticket,
                     "Demo Unit Test - 2026",
                     Jsonb(marks),

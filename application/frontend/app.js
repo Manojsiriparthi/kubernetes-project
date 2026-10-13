@@ -20,9 +20,11 @@ function renderStudent(student) {
   card.append(name);
 
   for (const detail of [
+    `Class: ${student.class_name}`,
     `Hall ticket: ${student.hall_ticket}`,
     `Address: ${student.address}`,
     `Phone: ${student.phone}`,
+    `Father's phone: ${student.father_phone}`,
     `Recent exam: ${student.recent_exam}`,
   ]) {
     const line = document.createElement("p");
@@ -74,6 +76,7 @@ lookupForm.addEventListener("submit", async (event) => {
   const params = new URLSearchParams({
     first_name: form.get("first_name"),
     last_name: form.get("last_name"),
+    class_name: form.get("class_name"),
   });
   try {
     const response = await fetch(`/api/students?${params}`);

@@ -57,7 +57,7 @@ docker compose -f .\docker-compose.yml up --build
 docker compose -f docker-compose.yml up --build
 ```
 
-Compose waits for PostgreSQL and the backend health checks before starting dependent services. Open [http://localhost:8080](http://localhost:8080), look up the seeded demo student **Ananya Rao**, or register a fictional student to create a sample hall ticket and marks. The database uses a named volume, so records remain after stopping the containers.
+Compose waits for PostgreSQL and the backend health checks before starting dependent services. Open [http://localhost:8080](http://localhost:8080), look up the seeded demo student **Ananya Rao** in class **10**, or register a fictional student with their class and father's phone number to create a sample hall ticket and marks. The database uses a named volume, so records remain after stopping the containers.
 
 Stop the stack with `Ctrl+C`, then run `docker compose -f docker-compose.yml down`. To remove the local database and its demo records too, run `docker compose -f docker-compose.yml down --volumes`. The default database password in the Compose file is for local classroom testing only; override it with the `POSTGRES_PASSWORD` environment variable if needed. Do not use real student records or this setup in production.
 

@@ -51,12 +51,14 @@
         <div class="card-icon" aria-hidden="true">✎</div>
         <p class="eyebrow eyebrow-green">NEW ADMISSION</p>
         <h2>Student registration</h2>
-        <p class="card-intro">Add a student's details and create a demo hall ticket with sample marks.</p>
+        <p class="card-intro">Add a student's details, class, and father's phone number to create a demo hall ticket with sample marks.</p>
         <form id="registration-form" class="form-grid">
           <label>First name<input name="first_name" autocomplete="given-name" maxlength="80" required></label>
           <label>Last name<input name="last_name" autocomplete="family-name" maxlength="80" required></label>
+          <label>Class<input name="class_name" maxlength="32" placeholder="e.g. 10" required></label>
           <label class="full-width">Address<input name="address" autocomplete="street-address" maxlength="300" required></label>
           <label class="full-width">Phone number<input name="phone" type="tel" autocomplete="tel" maxlength="32" required></label>
+          <label class="full-width">Father's phone number<input name="father_phone" type="tel" autocomplete="tel" maxlength="32" required></label>
           <button class="button button-dark full-width" type="submit">Register student <span aria-hidden="true">→</span></button>
         </form>
         <div id="registration-result" class="result" aria-live="polite"></div>
@@ -66,10 +68,11 @@
         <div class="card-icon card-icon-blue" aria-hidden="true">⌕</div>
         <p class="eyebrow eyebrow-blue">STUDENT PORTAL</p>
         <h2>Student information</h2>
-        <p class="card-intro">Enter a student's name to see their hall ticket, contact details and recent exam marks.</p>
+        <p class="card-intro">Enter a student's first name, last name, and class to see their hall ticket, contact details and recent exam marks.</p>
         <form id="lookup-form" class="form-grid lookup-grid">
           <label>First name<input name="first_name" autocomplete="given-name" maxlength="80" required></label>
           <label>Last name<input name="last_name" autocomplete="family-name" maxlength="80" required></label>
+          <label class="full-width">Class<input name="class_name" maxlength="32" placeholder="e.g. 10" required></label>
           <button class="button button-blue full-width" type="submit">Find student <span aria-hidden="true">→</span></button>
         </form>
         <div id="lookup-result" class="result" aria-live="polite"></div>
