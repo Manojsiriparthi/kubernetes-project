@@ -1,0 +1,48 @@
+services:
+  postgres:
+    build:
+      context: ./application
+      dockerfile: postgres/Dockerfile
+    environment:
+      POSTGRES_DB: school
+      POSTGRES_USER: school_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-school-demo-local-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./application/backend
+    environment:
+      DATABASE_URL: postgresql://school_app:${POSTGRES_PASSWORD:-school-demo-local-only}@postgres:5432/school
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health/ready', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./application/frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

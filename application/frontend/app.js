@@ -60,10 +60,7 @@ registrationForm.addEventListener("submit", async (event) => {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Registration failed.");
-    registrationResult.replaceChildren(
-      document.createTextNode("Student registered. Sample marks are for classroom demonstration only."),
-      renderStudent(result.student),
-    );
+    registrationResult.textContent = "Student registered successfully.";
     registrationForm.reset();
   } catch (error) {
     showError(registrationResult, error.message || "Could not reach the school service.");

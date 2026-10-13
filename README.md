@@ -42,9 +42,26 @@ The public node group is separate; frontend/backend and monitoring pods are pinn
 - `application/frontend/` — responsive school portal, Nginx API proxy, and frontend Dockerfile.
 - `application/postgres/` — PostgreSQL image that packages the demo schema/seed data for private ECR pulls.
 - `kubernetes/` — namespace, sample RBAC, database, backend, and frontend resources.
+- `docker-compose.yml` — local end-to-end application test with PostgreSQL, backend, and frontend.
 - `infra/bootstrap-state.ps1` / `infra/bootstrap-state.sh` — create the encrypted, versioned S3 backend bucket and ignored backend config.
 
-## 1. Create AWS infrastructure
+## 1. Test the application locally with Docker Compose
+
+Install Docker Desktop (Windows/macOS) or Docker Engine with the Compose plugin (Linux). From the repository root, build and start the PostgreSQL database, Flask backend, and frontend:
+
+```powershell
+docker compose -f .\docker-compose.yml up --build
+```
+
+```bash
+docker compose -f docker-compose.yml up --build
+```
+
+Compose waits for PostgreSQL and the backend health checks before starting dependent services. Open [http://localhost:8080](http://localhost:8080), look up the seeded demo student **Ananya Rao**, or register a fictional student to create a sample hall ticket and marks. The database uses a named volume, so records remain after stopping the containers.
+
+Stop the stack with `Ctrl+C`, then run `docker compose -f docker-compose.yml down`. To remove the local database and its demo records too, run `docker compose -f docker-compose.yml down --volumes`. The default database password in the Compose file is for local classroom testing only; override it with the `POSTGRES_PASSWORD` environment variable if needed. Do not use real student records or this setup in production.
+
+## 2. Create AWS infrastructure
 
 Install Terraform (1.10+), Git, AWS CLI v2, Docker, and kubectl. Configure AWS credentials with permissions to create the listed resources and an EKS administrator identity that can use the cluster. The EKS cluster is in `us-east-1` by default and needs three available Availability Zones.
 
@@ -101,7 +118,7 @@ terraform -chdir=infra/addons plan
 terraform -chdir=infra/addons apply
 ```
 
-The state bootstrap enables S3 versioning, server-side encryption, public-access blocking, TLS-only access, and Terraform's S3 lock file. Keep `infra/backend.hcl`, `infra/terraform.tfvars`, and `infra/addons/terraform.tfvars` out of Git; all are ignored. The bootstrap bucket is separate from the resources managed by the Terraform states and is not deleted by `terraform destroy`.
+The state bootstrap creates/uses the `school-demo-terraform-state-513263709619-us-east-1` bucket and enables S3 versioning, server-side encryption, public-access blocking, and TLS-only access. Both Terraform roots use native S3 state locking with `use_lockfile = true` (Terraform 1.10+); no DynamoDB lock table is required. The bootstrap checks that your AWS credentials belong to account `513263709619`. Keep `infra/backend.hcl`, `infra/terraform.tfvars`, and `infra/addons/terraform.tfvars` out of Git; all are ignored. The bootstrap bucket is separate from the resources managed by the Terraform states and is not deleted by `terraform destroy`.
 
 The foundation root creates the three subnet tiers and per-AZ NAT, private VPC endpoints for ECR/STS/EC2/CloudWatch and S3, EKS control plane and node groups, OIDC provider, VPC CNI/EBS CSI/CloudWatch Observability managed add-ons with IRSA, and three scanned ECR repositories. The addons root installs the AWS Load Balancer Controller, Cluster Autoscaler with scale permissions limited to tagged groups, a gp3 StorageClass, and Prometheus/Grafana with persistent storage. The EKS cluster creator is granted cluster-admin access; the namespaced Kubernetes observer role in `kubernetes/rbac.yaml` is a separate RBAC teaching example.
 
@@ -128,7 +145,7 @@ terraform -chdir=infra/addons output -raw grafana_admin_password
 Store the displayed Grafana password securely. If no `grafana_admin_password` is set in `infra/addons/terraform.tfvars`, Terraform generates one and records it in the encrypted remote state.
 Grafana is internal-only by default; connect to it with `kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80` and visit `http://localhost:3000`.
 
-## 2. Build and push the application images
+## 3. Build and push the application images
 
 Build from the repository root and push all three containers to the private ECR repositories output by Terraform. The PostgreSQL image includes its initialization SQL so the isolated database subnet does not need public internet access:
 
@@ -187,7 +204,7 @@ $PostgresManifest = ".\kubernetes\postgres.yaml"
   Set-Content $PostgresManifest -NoNewline
 ```
 
-## 3. Deploy the Kubernetes application
+## 4. Deploy the Kubernetes application
 
 Create the namespace and a demo-only password in a Kubernetes Secret. The password is generated for this shell session; production credentials should come from a managed secret service, not a command-line literal.
 
@@ -271,5 +288,3 @@ terraform -chdir=infra destroy
 ```
 
 The database StorageClass uses `reclaimPolicy: Retain`, so the EBS volume can remain after the PVC is removed. Review and delete retained EBS volumes manually if the demo data is no longer needed. Check the AWS account for leftover load balancers, ECR images, and retained volumes. EKS, EC2 nodes, NAT Gateway, EBS, and load balancers can all incur charges while present.
-#   k u b e r n e t e s - p r o j e c t  
- 

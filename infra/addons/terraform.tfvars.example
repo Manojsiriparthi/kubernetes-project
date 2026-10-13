@@ -1,3 +1,0 @@
-region       = "us-east-1"
-project_name = "school-demo"
-cluster_name = "school-demo-eks"
