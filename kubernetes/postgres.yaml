@@ -1,3 +1,4 @@
+# Stable in-cluster address for the database (postgres.school-demo.svc:5432) used by the backend.
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,6 +13,7 @@ spec:
       port: 5432
       targetPort: 5432
 ---
+# Headless Service (no cluster IP): gives the StatefulSet pod a stable DNS name, postgres-0.postgres-headless.
 apiVersion: v1
 kind: Service
 metadata:
@@ -26,6 +28,7 @@ spec:
       port: 5432
       targetPort: 5432
 ---
+# Single PostgreSQL pod with its own persistent disk (a StatefulSet keeps identity and storage across restarts).
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -43,6 +46,7 @@ spec:
         app: postgres
     spec:
       automountServiceAccountToken: false
+      # Run only on the database node group; the toleration below lets it past that group's taint.
       nodeSelector:
         workload: database
       tolerations:
@@ -55,7 +59,7 @@ spec:
         fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: postgres
-          image: school-demo-postgres:1.0.0
+          image: postgres:16-alpine
           imagePullPolicy: IfNotPresent
           ports:
             - name: postgres
@@ -63,13 +67,13 @@ spec:
           env:
             - name: POSTGRES_DB
               valueFrom:
-                secretKeyRef:
-                  name: school-db
+                configMapKeyRef:
+                  name: school-config
                   key: POSTGRES_DB
             - name: POSTGRES_USER
               valueFrom:
-                secretKeyRef:
-                  name: school-db
+                configMapKeyRef:
+                  name: school-config
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -104,6 +108,15 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      # Init SQL from the postgres-init ConfigMap; Postgres runs it once, on first start with an empty disk.
+      volumes:
+        - name: init-sql
+          configMap:
+            name: postgres-init
+  # Creates the PVC postgres-data-postgres-0; the gp3 StorageClass then provisions the PV (an EBS volume) automatically.
   volumeClaimTemplates:
     - metadata:
         name: postgres-data

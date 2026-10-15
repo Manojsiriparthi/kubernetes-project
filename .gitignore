@@ -11,3 +11,12 @@ infra/addons/terraform.tfvars
 infra/addons/*.tfplan
 __pycache__/
 *.py[cod]
+
+# CI artefacts and local tool folders created by the Jenkins pipeline
+reports/
+.venv/
+node_modules/
+.scannerwork/
+.pytest_cache/
+.coverage
+.sonar/

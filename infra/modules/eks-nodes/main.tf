@@ -1,17 +1,26 @@
+# EKS managed node groups, one IAM role and launch template per group.
+# Pods pick a group with a nodeSelector on `workload`; tainted groups also need a matching toleration.
 locals {
   groups = {
+    # Edge/system nodes: untainted so CoreDNS and controllers (load balancer controller, autoscaler) can run here.
     public = {
       settings   = var.public_node_group
       subnet_ids = var.public_subnet_ids
       labels     = { workload = "public" }
       taints     = []
     }
+    # Frontend/backend pods only; tainted to keep other workloads off.
     application = {
       settings   = var.application_node_group
       subnet_ids = var.application_subnet_ids
       labels     = { workload = "application" }
-      taints     = []
+      taints = [{
+        key    = "workload"
+        value  = "application"
+        effect = "NO_SCHEDULE"
+      }]
     }
+    # PostgreSQL only; tainted so nothing else lands here.
     database = {
       settings   = var.database_node_group
       subnet_ids = var.database_subnet_ids
@@ -24,6 +33,7 @@ locals {
     }
   }
 
+  # Tags that let Cluster Autoscaler discover the groups and know their labels/taints when scaling from zero.
   autoscaler_tags = merge(
     {
       for group_name, group in local.groups : "${group_name}-enabled" => {
@@ -47,6 +57,11 @@ locals {
       }
     },
     {
+      application-taint = {
+        group_name = "application"
+        key        = "k8s.io/cluster-autoscaler/node-template/taint/workload"
+        value      = "application:NoSchedule"
+      }
       database-taint = {
         group_name = "database"
         key        = "k8s.io/cluster-autoscaler/node-template/taint/workload"
@@ -56,6 +71,7 @@ locals {
   )
 }
 
+# Instance role each node uses (join the cluster, pull images from ECR, SSM access).
 resource "aws_iam_role" "nodes" {
   for_each = local.groups
 
@@ -79,6 +95,7 @@ resource "aws_iam_role_policy_attachment" "nodes" {
         for policy in [
           "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
           "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
           ] : {
           id         = "${group_name}-${basename(policy)}"
           group_name = group_name
@@ -92,6 +109,7 @@ resource "aws_iam_role_policy_attachment" "nodes" {
   policy_arn = each.value.policy_arn
 }
 
+# Launch template: IMDSv2 only, encrypted gp3 root disk, public IP only for the public group.
 resource "aws_launch_template" "nodes" {
   for_each = local.groups
 
@@ -107,7 +125,6 @@ resource "aws_launch_template" "nodes" {
   network_interfaces {
     device_index                = 0
     associate_public_ip_address = each.key == "public"
-    security_groups             = [var.node_security_group_ids[each.key]]
   }
 
   block_device_mappings {
@@ -134,6 +151,7 @@ resource "aws_launch_template" "nodes" {
   tags = merge(var.tags, { Name = "${var.project_name}-${each.key}-launch-template" })
 }
 
+# The node groups themselves; desired size is ignored after creation so the autoscaler can change it.
 resource "aws_eks_node_group" "workers" {
   for_each = local.groups
 
@@ -185,6 +203,7 @@ resource "aws_eks_node_group" "workers" {
   }
 }
 
+# Applies the autoscaler discovery tags to the underlying Auto Scaling groups.
 resource "aws_autoscaling_group_tag" "autoscaler" {
   for_each = local.autoscaler_tags
 

@@ -1,4 +1,7 @@
+# Root module: wires the building blocks together.
+# Order on apply (reverse on destroy): networking -> eks_cluster -> eks_nodes -> eks_addons.
 locals {
+  # Tags applied to every AWS resource for cost tracking and ownership.
   common_tags = {
     Project     = var.project_name
     Environment = var.environment
@@ -6,6 +9,7 @@ locals {
   }
 }
 
+# VPC, subnets, gateways, route tables and the database security group.
 module "networking" {
   source = "./modules/networking"
 
@@ -15,6 +19,7 @@ module "networking" {
   tags         = local.common_tags
 }
 
+# EKS control plane (IAM role, OIDC, logs, encryption, access entries).
 module "eks_cluster" {
   source = "./modules/eks-cluster"
 
@@ -22,29 +27,25 @@ module "eks_cluster" {
   cluster_version                       = var.kubernetes_version
   vpc_id                                = module.networking.vpc_id
   control_plane_subnet_ids              = module.networking.private_subnet_ids
-  cluster_additional_security_group_ids = [module.networking.cluster_security_group_id]
   cluster_endpoint_public_access_cidrs  = var.cluster_endpoint_public_access_cidrs
+  cluster_endpoint_public_access        = var.cluster_endpoint_public_access
+  cluster_admin_principal_arns          = var.cluster_admin_principal_arns
+  cluster_developer_principal_arns      = var.cluster_developer_principal_arns
+  cluster_viewer_principal_arns         = var.cluster_viewer_principal_arns
   cluster_log_retention_days            = var.cluster_log_retention_days
   tags                                  = local.common_tags
+
+  # Whole network (routes, NAT, SGs) is ready before the cluster; destroyed after it.
+  depends_on = [module.networking]
 }
 
-module "eks_managed_addons" {
-  source = "./modules/eks-managed-addons"
-
-  cluster_name        = module.eks_cluster.cluster_name
-  cluster_version     = var.kubernetes_version
-  cluster_oidc_issuer = module.eks_cluster.cluster_oidc_issuer_url
-  cluster_oidc_arn    = module.eks_cluster.oidc_provider_arn
-  tags                = local.common_tags
-}
-
+# Managed node groups: public (edge), application (frontend/backend) and database.
 module "eks_nodes" {
   source = "./modules/eks-nodes"
 
   project_name            = var.project_name
   cluster_name            = module.eks_cluster.cluster_name
   cluster_version         = var.kubernetes_version
-  node_security_group_ids = module.networking.node_security_group_ids
   public_subnet_ids       = module.networking.public_subnet_ids
   application_subnet_ids  = module.networking.private_subnet_ids
   database_subnet_ids     = module.networking.database_subnet_ids
@@ -54,12 +55,36 @@ module "eks_nodes" {
   node_volume_size_gib    = var.node_volume_size_gib
   tags                    = local.common_tags
 
-  depends_on = [module.eks_cluster, module.eks_managed_addons]
+  depends_on = [module.networking, module.eks_cluster]
 }
 
+# Cluster add-ons: vpc-cni, kube-proxy, coredns, EBS CSI, CloudWatch, plus Helm charts
+# (load balancer controller, autoscaler, metrics-server, VPA, secrets CSI driver).
+module "eks_addons" {
+  source = "./modules/eks-addons"
+
+  project_name        = var.project_name
+  cluster_name        = module.eks_cluster.cluster_name
+  cluster_version     = var.kubernetes_version
+  cluster_oidc_issuer = module.eks_cluster.cluster_oidc_issuer_url
+  cluster_oidc_arn    = module.eks_cluster.oidc_provider_arn
+  region              = var.region
+  vpc_id              = module.networking.vpc_id
+  team_access_cidrs   = var.team_access_cidrs
+  team_certificate_arn = var.team_certificate_arn
+  alertmanager_slack_webhook_url = var.alertmanager_slack_webhook_url
+  tags                = local.common_tags
+
+  # Add-ons like coredns and ebs-csi need running nodes to become ACTIVE.
+  depends_on = [module.eks_nodes]
+}
+
+# Private ECR repositories for the application images (tags are immutable, scanned on push).
+# force_delete lets terraform destroy remove a repository even when it still holds images.
 resource "aws_ecr_repository" "frontend" {
   name                 = "${var.project_name}-frontend"
   image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -71,17 +96,7 @@ resource "aws_ecr_repository" "frontend" {
 resource "aws_ecr_repository" "backend" {
   name                 = "${var.project_name}-backend"
   image_tag_mutability = "IMMUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_ecr_repository" "postgres" {
-  name                 = "${var.project_name}-postgres"
-  image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -120,13 +135,15 @@ output "node_roles" {
   description = "IAM role ARNs used by the three managed node groups."
 }
 
+output "grafana_admin_password" {
+  value       = module.eks_addons.grafana_admin_password
+  sensitive   = true
+  description = "Grafana admin password (terraform output -raw grafana_admin_password)."
+}
+
 output "eks_addon_roles" {
-  value = {
-    vpc_cni    = module.eks_managed_addons.role_arns.vpc_cni
-    ebs_csi    = module.eks_managed_addons.role_arns.ebs_csi
-    cloudwatch = module.eks_managed_addons.role_arns.cloudwatch
-  }
-  description = "IRSA role ARNs for EKS-managed add-ons."
+  value       = module.eks_addons.role_arns
+  description = "IRSA role ARNs for EKS add-ons."
 }
 
 output "frontend_ecr_repository_url" {
@@ -137,9 +154,4 @@ output "frontend_ecr_repository_url" {
 output "backend_ecr_repository_url" {
   value       = aws_ecr_repository.backend.repository_url
   description = "Push the backend image to this repository."
-}
-
-output "postgres_ecr_repository_url" {
-  value       = aws_ecr_repository.postgres.repository_url
-  description = "Push the PostgreSQL image to this private repository for database-tier pulls."
 }

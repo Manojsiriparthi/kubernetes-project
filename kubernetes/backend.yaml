@@ -1,3 +1,4 @@
+# Internal address of the API; the frontend's nginx proxies /api/ to backend:5000.
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,13 +13,18 @@ spec:
       port: 5000
       targetPort: http
 ---
+# Flask API: 3 replicas spread across availability zones, scheduled on the application nodes.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
   namespace: school-demo
 spec:
-  replicas: 2
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: backend
@@ -28,8 +34,29 @@ spec:
         app: backend
     spec:
       automountServiceAccountToken: false
+      # Run on application nodes; the toleration lets pods past that group's taint.
       nodeSelector:
         workload: application
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: application
+          effect: NoSchedule
+      topologySpreadConstraints:
+        # Hard AZ spread with maxSkew 1 allows a 4th pod (2/1/1) instead of leaving it Pending.
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: backend
+          matchLabelKeys: [pod-template-hash]
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: backend
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -43,11 +70,24 @@ spec:
             - name: http
               containerPort: 5000
           env:
-            - name: DATABASE_URL
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: school-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: school-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: school-db
-                  key: DATABASE_URL
+                  key: POSTGRES_PASSWORD
+            # $(VAR) is expanded by Kubernetes from the env entries defined above it.
+            - name: DATABASE_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres.school-demo.svc.cluster.local:5432/$(POSTGRES_DB)
           resources:
             requests:
               cpu: 100m

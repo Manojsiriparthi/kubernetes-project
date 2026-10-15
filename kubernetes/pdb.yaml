@@ -1,0 +1,23 @@
+# Keep at least 2 frontend pods running during voluntary disruptions such as node drains and upgrades.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: school-demo
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: frontend
+---
+# Same for the backend.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: school-demo
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: backend

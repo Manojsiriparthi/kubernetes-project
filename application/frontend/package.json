@@ -1,0 +1,12 @@
+{
+  "name": "school-demo-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static school portal; npm is used only to run the DOM tests and the dependency audit.",
+  "scripts": {
+    "test": "node --test tests/"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}

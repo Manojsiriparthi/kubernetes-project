@@ -54,6 +54,53 @@ variable "cluster_endpoint_public_access_cidrs" {
   }
 }
 
+variable "cluster_endpoint_public_access" {
+  description = "Expose the EKS API publicly (restricted to the trusted CIDRs). Set false for private-only access."
+  type        = bool
+  default     = true
+}
+
+variable "cluster_admin_principal_arns" {
+  description = "IAM role/user ARNs granted cluster-admin through EKS access entries (in addition to the creator)."
+  type        = list(string)
+  default     = []
+}
+
+variable "cluster_developer_principal_arns" {
+  description = "IAM role/user ARNs allowed to edit workloads in the school-demo namespace only."
+  type        = list(string)
+  default     = []
+}
+
+variable "cluster_viewer_principal_arns" {
+  description = "IAM role/user ARNs with read-only access to the whole cluster."
+  type        = list(string)
+  default     = []
+}
+
+variable "team_access_cidrs" {
+  description = "Trusted public IPv4 CIDRs (office/VPN, e.g. your IP as x.x.x.x/32) allowed to reach the team-tools ALB (Argo CD, Prometheus, Grafana)."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.team_access_cidrs) > 0 && alltrue([for cidr in var.team_access_cidrs : can(cidrnetmask(cidr)) && cidr != "0.0.0.0/0"])
+    error_message = "Specify valid trusted IPv4 CIDRs; 0.0.0.0/0 is not allowed."
+  }
+}
+
+variable "team_certificate_arn" {
+  description = "Optional ACM certificate ARN for the team-tools ALB. Leave null for plain HTTP (testing only)."
+  type        = string
+  default     = null
+}
+
+variable "alertmanager_slack_webhook_url" {
+  description = "Optional Slack incoming-webhook URL for Alertmanager notifications. Leave null to view alerts in the Alertmanager UI only."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 variable "cluster_log_retention_days" {
   description = "Retention period for EKS control-plane logs."
   type        = number
@@ -80,10 +127,10 @@ variable "public_node_group" {
     max_size       = number
   })
   default = {
-    instance_types = ["m7i.large"]
-    min_size       = 3
-    desired_size   = 3
-    max_size       = 6
+    instance_types = ["t3.medium"]
+    min_size       = 1
+    desired_size   = 1
+    max_size       = 2
   }
 
   validation {
@@ -101,10 +148,10 @@ variable "application_node_group" {
     max_size       = number
   })
   default = {
-    instance_types = ["m7i.large"]
+    instance_types = ["t3.medium"]
     min_size       = 3
     desired_size   = 3
-    max_size       = 9
+    max_size       = 6
   }
 
   validation {
@@ -122,10 +169,10 @@ variable "database_node_group" {
     max_size       = number
   })
   default = {
-    instance_types = ["m7i.large"]
-    min_size       = 3
-    desired_size   = 3
-    max_size       = 6
+    instance_types = ["t3.medium"]
+    min_size       = 1
+    desired_size   = 1
+    max_size       = 1
   }
 
   validation {

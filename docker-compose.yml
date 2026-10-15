@@ -1,14 +1,15 @@
+# Local end-to-end test: PostgreSQL -> backend (Flask) -> frontend (nginx) on http://localhost:8080.
 services:
   postgres:
-    build:
-      context: ./application
-      dockerfile: postgres/Dockerfile
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: school
       POSTGRES_USER: school_app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-school-demo-local-only}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Runs the schema/seed SQL on first start, when the data volume is empty.
+      - ./application/backend/init.sql:/docker-entrypoint-initdb.d/10-school-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
@@ -17,6 +18,8 @@ services:
       start_period: 10s
 
   backend:
+    # The Jenkins pipeline rewrites this image name to the ECR image it just pushed.
+    image: school-demo-backend:local
     build:
       context: ./application/backend
     environment:
@@ -36,10 +39,13 @@ services:
       start_period: 10s
 
   frontend:
+    # The Jenkins pipeline rewrites this image name to the ECR image it just pushed.
+    image: school-demo-frontend:local
     build:
       context: ./application/frontend
     ports:
-      - "8080:8080"
+      # FRONTEND_PORT lets CI use another port, because Jenkins itself listens on 8080.
+      - "${FRONTEND_PORT:-8080}:8080"
     depends_on:
       backend:
         condition: service_healthy

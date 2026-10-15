@@ -1,3 +1,4 @@
+# Namespace that holds every app resource; deleting it removes the whole app.
 apiVersion: v1
 kind: Namespace
 metadata:

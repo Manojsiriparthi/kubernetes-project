@@ -1,0 +1,9 @@
+# Non-secret database settings, read by both the postgres StatefulSet and the backend.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: school-config
+  namespace: school-demo
+data:
+  POSTGRES_DB: school
+  POSTGRES_USER: school_app

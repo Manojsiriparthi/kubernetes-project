@@ -1,0 +1,35 @@
+# Runs once, only when the data directory is empty (first start of postgres-0).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: school-demo
+data:
+  10-school-schema.sql: |
+    CREATE SEQUENCE hall_ticket_seq START WITH 2001;
+
+    CREATE TABLE students (
+        id BIGSERIAL PRIMARY KEY,
+        first_name VARCHAR(80) NOT NULL,
+        last_name VARCHAR(80) NOT NULL,
+        class_name VARCHAR(32) NOT NULL,
+        address VARCHAR(300) NOT NULL,
+        phone VARCHAR(32) NOT NULL,
+        father_phone VARCHAR(32) NOT NULL,
+        hall_ticket VARCHAR(32) NOT NULL UNIQUE,
+        recent_exam VARCHAR(120) NOT NULL,
+        marks JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    INSERT INTO students
+        (first_name, last_name, class_name, address, phone, father_phone, hall_ticket, recent_exam, marks)
+    VALUES
+        ('Ananya', 'Rao', '10', '12 Lake View Road, Hyderabad', '9000000101', '9000000201', 'SCI-2026-00101', 'Term 1 Assessment - 2026',
+         '{"Telugu": 91, "English": 88, "Maths": 96, "Science": 93, "Social": 89}'),
+        ('Arjun', 'Kumar', '9', '8 Green Park, Hyderabad', '9000000102', '9000000202', 'SCI-2026-00102', 'Term 1 Assessment - 2026',
+         '{"Telugu": 84, "English": 90, "Maths": 92, "Science": 87, "Social": 85}'),
+        ('Meera', 'Reddy', '10', '21 School Street, Secunderabad', '9000000103', '9000000203', 'SCI-2026-00103', 'Term 1 Assessment - 2026',
+         '{"Telugu": 95, "English": 94, "Maths": 89, "Science": 91, "Social": 97}'),
+        ('Rahul', 'Sharma', '8', '4 Sunrise Colony, Hyderabad', '9000000104', '9000000204', 'SCI-2026-00104', 'Term 1 Assessment - 2026',
+         '{"Telugu": 78, "English": 82, "Maths": 86, "Science": 80, "Social": 84}');

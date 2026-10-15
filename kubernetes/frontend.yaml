@@ -1,15 +1,11 @@
+# Internal Service for the frontend pods; the public ALB (see ingress.yaml) sends traffic straight to the pods.
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend
   namespace: school-demo
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: external
-    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
-    service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: preserve_client_ip.enabled=false
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: frontend
   ports:
@@ -17,13 +13,18 @@ spec:
       port: 80
       targetPort: http
 ---
+# Nginx serving the web page and proxying /api/ to the backend: 3 replicas spread across availability zones.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
   namespace: school-demo
 spec:
-  replicas: 2
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: frontend
@@ -33,8 +34,29 @@ spec:
         app: frontend
     spec:
       automountServiceAccountToken: false
+      # Run on application nodes; the toleration lets pods past that group's taint.
       nodeSelector:
         workload: application
+      tolerations:
+        - key: workload
+          operator: Equal
+          value: application
+          effect: NoSchedule
+      topologySpreadConstraints:
+        # Hard AZ spread with maxSkew 1 allows a 4th pod (2/1/1) instead of leaving it Pending.
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: frontend
+          matchLabelKeys: [pod-template-hash]
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: frontend
       securityContext:
         runAsNonRoot: true
         runAsUser: 101

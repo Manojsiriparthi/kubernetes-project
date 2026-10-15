@@ -1,0 +1,6 @@
+# Python packages the pipeline installs to run the unit and integration tests and the dependency audit.
+-r ../application/backend/requirements.txt
+pytest==8.3.5
+pytest-cov==6.1.1
+requests==2.32.3
+pip-audit==2.9.0

@@ -1,3 +1,5 @@
+# Values other modules and the root need from the cluster.
+
 output "cluster_name" {
   value = module.eks.cluster_name
 }
@@ -10,6 +12,7 @@ output "cluster_certificate_authority_data" {
   value = module.eks.cluster_certificate_authority_data
 }
 
+# OIDC details used to build IAM roles for service accounts (IRSA).
 output "cluster_oidc_issuer_url" {
   value = module.eks.cluster_oidc_issuer_url
 }
@@ -20,4 +23,24 @@ output "oidc_provider_arn" {
 
 output "cluster_primary_security_group_id" {
   value = module.eks.cluster_primary_security_group_id
+}
+
+output "cluster_arn" {
+  value = module.eks.cluster_arn
+}
+
+output "cluster_version" {
+  value = module.eks.cluster_version
+}
+
+output "cluster_iam_role_arn" {
+  value = module.eks.cluster_iam_role_arn
+}
+
+output "kms_key_arn" {
+  value = module.eks.kms_key_arn
+}
+
+output "cloudwatch_log_group_name" {
+  value = module.eks.cloudwatch_log_group_name
 }

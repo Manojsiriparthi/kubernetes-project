@@ -1,0 +1,27 @@
+# Public ALB for end users: the AWS Load Balancer Controller builds an internet-facing
+# Application Load Balancer from this Ingress and forwards port 80 to the frontend pods.
+# It is a separate ALB from the team-tools one (different ingress group), so it stays open to everyone.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+  namespace: school-demo
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # Send traffic directly to pod IPs instead of going through node ports.
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: public-frontend
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http

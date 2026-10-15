@@ -1,3 +1,4 @@
+# Names and IAM role ARNs of the node groups, keyed by group (public, application, database).
 output "node_group_names" {
   value = { for name, group in aws_eks_node_group.workers : name => group.node_group_name }
 }

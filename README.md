@@ -10,10 +10,10 @@ A classroom-sized example of a student portal running on Amazon EKS. It demonstr
 Browser
   │ HTTP
   ▼
-Internet-facing AWS Network Load Balancer
+Internet-facing AWS Application Load Balancer (Ingress)
   │
   ▼
-frontend Service (LoadBalancer) ── frontend Deployment (2 pods, private application nodes)
+frontend Service (ClusterIP) ── frontend Deployment (3 pods, private application nodes)
                                           │ /api proxy
                                           ▼
                                 backend Service (ClusterIP)
@@ -40,7 +40,6 @@ The public node group is separate; frontend/backend and monitoring pods are pinn
 - `infra/` — Terraform VPC, EKS, managed node groups, EKS add-ons, IRSA roles, controllers, monitoring, and ECR repositories.
 - `application/backend/` — Flask API, PostgreSQL initialization SQL, and backend Dockerfile.
 - `application/frontend/` — responsive school portal, Nginx API proxy, and frontend Dockerfile.
-- `application/postgres/` — PostgreSQL image that packages the demo schema/seed data for private ECR pulls.
 - `kubernetes/` — namespace, sample RBAC, database, backend, and frontend resources.
 - `docker-compose.yml` — local end-to-end application test with PostgreSQL, backend, and frontend.
 - `infra/bootstrap-state.ps1` / `infra/bootstrap-state.sh` — create the encrypted, versioned S3 backend bucket and ignored backend config.
@@ -147,13 +146,12 @@ Grafana is internal-only by default; connect to it with `kubectl port-forward -n
 
 ## 3. Build and push the application images
 
-Build from the repository root and push all three containers to the private ECR repositories output by Terraform. The PostgreSQL image includes its initialization SQL so the isolated database subnet does not need public internet access:
+Build from the repository root and push the backend and frontend containers to the private ECR repositories output by Terraform. PostgreSQL uses the stock `postgres:16-alpine` image from Docker Hub, so there is nothing to build for it:
 
 ```bash
 REGION=us-east-1
 FRONTEND_REPO="$(terraform -chdir=infra output -raw frontend_ecr_repository_url)"
 BACKEND_REPO="$(terraform -chdir=infra output -raw backend_ecr_repository_url)"
-POSTGRES_REPO="$(terraform -chdir=infra output -raw postgres_ecr_repository_url)"
 REGISTRY="${BACKEND_REPO%%/*}"
 aws ecr get-login-password --region "$REGION" |
   docker login --username AWS --password-stdin "$REGISTRY"
@@ -162,16 +160,12 @@ docker build -t "${BACKEND_REPO}:1.0.0" application/backend
 docker push "${BACKEND_REPO}:1.0.0"
 docker build -t "${FRONTEND_REPO}:1.0.0" application/frontend
 docker push "${FRONTEND_REPO}:1.0.0"
-docker build -t "${POSTGRES_REPO}:1.0.0" \
-  -f application/postgres/Dockerfile application
-docker push "${POSTGRES_REPO}:1.0.0"
 ```
 
 ```powershell
 $Region = "us-east-1"
 $FrontendRepo = terraform -chdir=infra output -raw frontend_ecr_repository_url
 $BackendRepo = terraform -chdir=infra output -raw backend_ecr_repository_url
-$PostgresRepo = terraform -chdir=infra output -raw postgres_ecr_repository_url
 $Registry = ($BackendRepo -split "/")[0]
 aws ecr get-login-password --region $Region | docker login --username AWS --password-stdin $Registry
 
@@ -179,8 +173,6 @@ docker build -t "${BackendRepo}:1.0.0" .\application\backend
 docker push "${BackendRepo}:1.0.0"
 docker build -t "${FrontendRepo}:1.0.0" .\application\frontend
 docker push "${FrontendRepo}:1.0.0"
-docker build -t "${PostgresRepo}:1.0.0" -f .\application\postgres\Dockerfile .\application
-docker push "${PostgresRepo}:1.0.0"
 ```
 
 Update the deployment manifests to point at the pushed ECR images (the short image names are local classroom placeholders):
@@ -189,7 +181,6 @@ ECR tags are immutable; choose a new image tag when publishing an updated build.
 ```bash
 sed -i "s|school-demo-backend:1.0.0|${BACKEND_REPO}:1.0.0|" kubernetes/backend.yaml
 sed -i "s|school-demo-frontend:1.0.0|${FRONTEND_REPO}:1.0.0|" kubernetes/frontend.yaml
-sed -i "s|school-demo-postgres:1.0.0|${POSTGRES_REPO}:1.0.0|" kubernetes/postgres.yaml
 ```
 
 ```powershell
@@ -199,26 +190,15 @@ $BackendManifest = ".\kubernetes\backend.yaml"
 $FrontendManifest = ".\kubernetes\frontend.yaml"
 (Get-Content $FrontendManifest -Raw).Replace("school-demo-frontend:1.0.0", "${FrontendRepo}:1.0.0") |
   Set-Content $FrontendManifest -NoNewline
-$PostgresManifest = ".\kubernetes\postgres.yaml"
-(Get-Content $PostgresManifest -Raw).Replace("school-demo-postgres:1.0.0", "${PostgresRepo}:1.0.0") |
-  Set-Content $PostgresManifest -NoNewline
 ```
 
 ## 4. Deploy the Kubernetes application
 
-Create the namespace and a demo-only password in a Kubernetes Secret. The password is generated for this shell session; production credentials should come from a managed secret service, not a command-line literal.
+The manifests create the namespace, the `gp3` StorageClass, a ConfigMap (`school-config`) and a demo Secret (`school-db`). Edit the placeholder `POSTGRES_PASSWORD` in `kubernetes/secret.yaml` before deploying (the backend builds `DATABASE_URL` from the ConfigMap and this Secret, so use a URL-safe password); production credentials should come from a managed secret service.
 
 ```bash
-kubectl apply -f kubernetes/namespace.yaml
-DB_PASSWORD="$(openssl rand -hex 24)"
-DATABASE_URL="postgresql://school_app:${DB_PASSWORD}@postgres.school-demo.svc.cluster.local:5432/school"
-kubectl create secret generic school-db -n school-demo \
-  --from-literal=POSTGRES_DB=school \
-  --from-literal=POSTGRES_USER=school_app \
-  --from-literal=POSTGRES_PASSWORD="$DB_PASSWORD" \
-  --from-literal=DATABASE_URL="$DATABASE_URL"
-
-kubectl apply -k .
+kubectl apply -f kubernetes/namespace.yaml -f kubernetes/storageclass.yaml
+kubectl apply -f kubernetes/
 kubectl get pods,services,pvc -n school-demo -o wide
 kubectl rollout status statefulset/postgres -n school-demo
 kubectl rollout status deployment/backend -n school-demo
@@ -226,31 +206,27 @@ kubectl rollout status deployment/frontend -n school-demo
 ```
 
 ```powershell
-kubectl apply -f .\kubernetes\namespace.yaml
-$DbPassword = [guid]::NewGuid().ToString("N")
-$DatabaseUrl = "postgresql://school_app:${DbPassword}@postgres.school-demo.svc.cluster.local:5432/school"
-kubectl create secret generic school-db -n school-demo `
-  --from-literal=POSTGRES_DB=school `
-  --from-literal=POSTGRES_USER=school_app `
-  --from-literal=POSTGRES_PASSWORD=$DbPassword `
-  --from-literal=DATABASE_URL=$DatabaseUrl
-
-kubectl apply -k .
+kubectl apply -f .\kubernetes\namespace.yaml -f .\kubernetes\storageclass.yaml
+kubectl apply -f .\kubernetes\
 kubectl get pods,services,pvc -n school-demo -o wide
 kubectl rollout status statefulset/postgres -n school-demo
 kubectl rollout status deployment/backend -n school-demo
 kubectl rollout status deployment/frontend -n school-demo
 ```
 
-Terraform creates the `gp3` StorageClass, which provisions encrypted EBS volumes through the CSI driver. The first PostgreSQL initialization runs the SQL in `application/backend/init.sql` and inserts four demo students. The image's PostgreSQL entrypoint runs that script only when the data directory is new; changing the SQL later does not re-seed an existing PVC.
+The `gp3` StorageClass (`kubernetes/storageclass.yaml`) provisions encrypted EBS volumes through the CSI driver.
 
-Wait for the AWS Network Load Balancer address:
+PostgreSQL uses the stock `postgres:16-alpine` image. The schema and four demo students come from the `postgres-init` ConfigMap (`kubernetes/postgres-init.yaml`), mounted at `/docker-entrypoint-initdb.d`, so the tables are created automatically on the first start of `postgres-0`. The script runs only when the data directory is empty; changing the SQL later does not re-seed an existing PVC.
+
+To log in and run SQL by hand: `kubectl exec -it postgres-0 -n school-demo -- sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`.
+
+Wait for the public ALB address from the Ingress:
 
 ```powershell
-kubectl get service frontend -n school-demo --watch
+kubectl get ingress frontend -n school-demo --watch
 ```
 
-Open the `EXTERNAL-IP`/hostname in a browser using `http://`. AWS provisioning can take a few minutes. Try **Student info** with `Ananya` / `Rao`, or register a demo student. Each new registration gets a hall ticket and five randomly generated demonstration marks; all marks are fictional.
+Open the `ADDRESS` hostname in a browser using `http://`. AWS provisioning can take a few minutes. Try **Student info** with `Ananya` / `Rao`, or register a demo student. Each new registration gets a hall ticket and five randomly generated demonstration marks; all marks are fictional.
 
 ## Classroom walkthrough
 
