@@ -1,11 +1,11 @@
 :root {
   color-scheme: light;
-  --ink: #17343a;
-  --muted: #657679;
-  --green: #1b514b;
-  --gold: #e8bd73;
-  --paper: #f7f5ef;
-  --line: #e8e6de;
+  --ink: #1d1a3d;
+  --muted: #6a6788;
+  --green: #3d2f8f;
+  --gold: #ffb347;
+  --paper: #f4f2fb;
+  --line: #e4e0f2;
   font-family: "DM Sans", sans-serif;
 }
 
@@ -40,7 +40,7 @@ button, input { font: inherit; }
   position: relative; min-height: 510px; display: flex; align-items: center;
   padding: 64px max(10vw, 28px); color: #fff;
   background:
-    linear-gradient(90deg, rgba(13, 43, 48, .88) 0%, rgba(17, 48, 52, .71) 47%, rgba(15, 39, 44, .14) 100%),
+    linear-gradient(90deg, rgba(34, 24, 92, .9) 0%, rgba(61, 47, 143, .72) 47%, rgba(45, 36, 112, .18) 100%),
     url("https://images.unsplash.com/photo-1580582932707-520aed937b7b?auto=format&fit=crop&w=2000&q=85") center 48% / cover;
 }
 .hero-content { max-width: 590px; }
@@ -95,6 +95,18 @@ h1, h2 { font-family: "Playfair Display", serif; }
 .site-footer > p { color: var(--muted); font-family: "Playfair Display", serif; font-style: italic; font-size: 13px; }
 .demo-note { color: #849091; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
 
+/* Version 2 additions: version badge, stats strip, marks bar chart. */
+.version-badge { padding: 5px 11px; border-radius: 999px; background: linear-gradient(135deg, #6a4df4, #3d2f8f); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: -42px; position: relative; z-index: 1; }
+.stat { padding: 22px 16px; border-radius: 8px; background: #fff; text-align: center; box-shadow: 0 10px 30px rgba(61, 47, 143, .14); border-top: 4px solid #6a4df4; }
+.stat strong { display: block; color: var(--green); font: 700 30px "Playfair Display", serif; }
+.stat span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.mark-bars { display: grid; gap: 7px; margin-top: 12px; }
+.mark-bar { display: grid; grid-template-columns: 70px 1fr 28px; align-items: center; gap: 8px; font-size: 11px; color: #4b4873; }
+.mark-bar b { text-align: right; }
+.mark-track { height: 8px; border-radius: 999px; background: #e9e5f8; overflow: hidden; }
+.mark-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #6a4df4, #ffb347); }
+
 @media (max-width: 720px) {
   .site-header { height: auto; min-height: 78px; padding: 15px 20px; align-items: flex-start; gap: 16px; flex-direction: column; }
   .main-nav { width: 100%; justify-content: space-between; gap: 10px; }
@@ -103,6 +115,7 @@ h1, h2 { font-family: "Playfair Display", serif; }
   .welcome { grid-template-columns: 1fr; gap: 18px; padding: 46px 0 30px; }
   .portal { grid-template-columns: 1fr; padding-bottom: 48px; }
   .portal-card { padding: 24px; }
+  .stats { grid-template-columns: repeat(2, 1fr); margin-top: -24px; }
   .site-footer { align-items: flex-start; flex-direction: column; gap: 10px; }
   .site-footer > p { margin: 0; }
 }

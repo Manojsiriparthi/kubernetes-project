@@ -47,6 +47,27 @@ function renderStudent(student) {
     marks.append(chip);
   }
   card.append(marks);
+
+  // Version 2: a bar per subject so marks are easy to compare at a glance (marks are out of 100).
+  const bars = document.createElement("div");
+  bars.className = "mark-bars";
+  for (const [subject, score] of Object.entries(student.marks)) {
+    const row = document.createElement("div");
+    row.className = "mark-bar";
+    const label = document.createElement("span");
+    label.textContent = subject;
+    const track = document.createElement("div");
+    track.className = "mark-track";
+    const fill = document.createElement("div");
+    fill.className = "mark-fill";
+    fill.style.width = `${Math.min(score, 100)}%`;
+    track.append(fill);
+    const value = document.createElement("b");
+    value.textContent = score;
+    row.append(label, track, value);
+    bars.append(row);
+  }
+  card.append(bars);
   return card;
 }
 
