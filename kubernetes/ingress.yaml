@@ -5,12 +5,12 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: frontend
-  namespace: school-demo
+  namespace: school-demo-v1
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     # Send traffic directly to pod IPs instead of going through node ports.
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/group.name: public-frontend
+    alb.ingress.kubernetes.io/group.name: public-frontend-v1
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
     alb.ingress.kubernetes.io/healthcheck-path: /
 spec:

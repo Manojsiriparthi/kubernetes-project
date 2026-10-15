@@ -9,7 +9,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TF_DIR="${REPO_ROOT}/infra"
 K8S_DIR="${REPO_ROOT}/kubernetes"
-NAMESPACE="school-demo"
+# The namespace and StorageClass names come from the manifests of the branch you have checked out
+# (school-demo-v1 / gp3-v1 on release/version1, school-demo-v2 / gp3-v2 on release/version2).
+NAMESPACE="$(awk '/^  name:/ {print $2; exit}' "${K8S_DIR}/namespace.yaml")"
+STORAGE_CLASS="$(awk '/^  name:/ {print $2; exit}' "${K8S_DIR}/storageclass.yaml")"
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -131,7 +134,7 @@ EOF
   # Deleting the namespace removes the Ingress first, so the AWS Load Balancer Controller can delete the ALB.
   log "Deleting namespace ${NAMESPACE} (this also removes the public ALB and the database PVC)"
   kubectl delete namespace "${NAMESPACE}" --ignore-not-found --wait=true --timeout=15m
-  kubectl delete storageclass gp3 --ignore-not-found
+  kubectl delete storageclass "${STORAGE_CLASS}" --ignore-not-found
 
   empty_repository "${FRONTEND_REPO##*/}"
   empty_repository "${BACKEND_REPO##*/}"

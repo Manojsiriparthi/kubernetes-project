@@ -22,7 +22,7 @@ locals {
       policy_associations = {
         edit = {
           policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy"
-          access_scope = { type = "namespace", namespaces = ["school-demo"] }
+          access_scope = { type = "namespace", namespaces = ["school-demo", "school-demo-v1", "school-demo-v2"] }
         }
       }
     }
