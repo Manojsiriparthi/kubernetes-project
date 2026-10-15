@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: postgres-init
-  namespace: school-demo-v2
+  namespace: school-demo
 data:
   10-school-schema.sql: |
     CREATE SEQUENCE hall_ticket_seq START WITH 2001;

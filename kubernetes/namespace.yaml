@@ -2,6 +2,9 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: school-demo-v2
+  name: school-demo
   labels:
     app.kubernetes.io/part-of: school-demo
+    # The load balancer controller adds a readiness gate to pods here: a new pod only counts as Ready once the ALB
+    # reports it healthy, so a rollout (or rollback) never removes old pods before the new ones receive traffic.
+    elbv2.k8s.aws/pod-readiness-gate-inject: enabled

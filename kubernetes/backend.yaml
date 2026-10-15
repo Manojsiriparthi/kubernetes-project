@@ -3,7 +3,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: school-demo-v2
+  namespace: school-demo
 spec:
   type: ClusterIP
   selector:
@@ -18,7 +18,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: school-demo-v2
+  namespace: school-demo
 spec:
   replicas: 3
   strategy:
@@ -95,6 +95,11 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+          # Keep serving for a few seconds after the pod is told to stop, while the ALB drains it.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "10"]
           startupProbe:
             httpGet:
               path: /api/health/ready
