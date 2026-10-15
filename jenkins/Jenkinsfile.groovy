@@ -10,7 +10,7 @@
 //                                                          18 Commit + raise pull request
 //
 // The pipeline ENDS when the pull request is raised and Slack is told.
-// CD is Argo CD: when the PR is merged into master, Argo CD deploys it (see argocd/application.yaml).
+// CD is Argo CD: when the PR is merged into main, Argo CD deploys it (see argocd/application.yaml).
 //
 // Jenkins credentials to create (type "Secret text"):
 //   github-token   GitHub token with repo scope      sonar-token   SonarQube token
@@ -58,8 +58,8 @@ pipeline {
 
     parameters {
         string(name: 'GIT_URL', defaultValue: 'https://github.com/Manojsiriparthi/kubernetes-project', description: 'Repository to build')
-        string(name: 'BRANCH', defaultValue: 'main', description: 'Branch to build')
-        string(name: 'BASE_BRANCH', defaultValue: 'master', description: 'Branch the pull request goes into (Argo CD watches it)')
+        string(name: 'BRANCH', defaultValue: 'release/version1', description: 'Release branch to build (release/version1 or release/version2)')
+        string(name: 'BASE_BRANCH', defaultValue: 'main', description: 'Branch the pull request goes into (Argo CD watches it)')
     }
 
     environment {
@@ -308,7 +308,7 @@ pipeline {
             }
         }
 
-        // ---- 18. Commit, push a branch, open a pull request into master. The pipeline stops here. --------
+        // ---- 18. Commit, push a branch, open a pull request into main. The pipeline stops here. -----------
         // The details are in jenkins/scripts/create-pr.sh. Merging the PR is what makes Argo CD deploy.
         stage('Commit and raise pull request') {
             steps {

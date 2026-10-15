@@ -1,6 +1,6 @@
 # Argo CD Application: the CD half of the plan.
 # Jenkins (CI) opens a pull request that changes the image names in kubernetes/*.yaml.
-# When that pull request is merged into master, Argo CD notices the change and deploys it automatically.
+# When that pull request is merged into main, Argo CD notices the change and deploys it automatically.
 # Apply this file once, after Argo CD is running:  kubectl apply -f argocd/application.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/Manojsiriparthi/kubernetes-project
     # Argo CD watches this branch; it is also the branch Jenkins raises its pull requests against.
-    targetRevision: master
+    targetRevision: main
     # Every manifest in this folder is deployed.
     path: kubernetes
   destination:
