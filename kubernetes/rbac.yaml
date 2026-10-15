@@ -1,17 +1,17 @@
-# Teaching example of in-cluster RBAC: a read-only identity for the school-demo namespace.
+# Teaching example of in-cluster RBAC: a read-only identity for this namespace.
 # Identity (ServiceAccount) -> permissions (Role) -> link between them (RoleBinding).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: school-observer
-  namespace: school-demo
+  namespace: school-demo-v2
 automountServiceAccountToken: false
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: school-observer
-  namespace: school-demo
+  namespace: school-demo-v2
 rules:
   - apiGroups: [""]
     resources: ["pods", "services", "persistentvolumeclaims"]
@@ -25,11 +25,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: school-observer
-  namespace: school-demo
+  namespace: school-demo-v2
 subjects:
   - kind: ServiceAccount
     name: school-observer
-    namespace: school-demo
+    namespace: school-demo-v2
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

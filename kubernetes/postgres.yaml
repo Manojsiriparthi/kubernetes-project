@@ -1,9 +1,9 @@
-# Stable in-cluster address for the database (postgres.school-demo.svc:5432) used by the backend.
+# Stable in-cluster address for the database (postgres:5432 inside the namespace) used by the backend.
 apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: school-demo
+  namespace: school-demo-v2
 spec:
   type: ClusterIP
   selector:
@@ -18,7 +18,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres-headless
-  namespace: school-demo
+  namespace: school-demo-v2
 spec:
   clusterIP: None
   selector:
@@ -33,7 +33,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
-  namespace: school-demo
+  namespace: school-demo-v2
 spec:
   serviceName: postgres-headless
   replicas: 1
@@ -122,7 +122,7 @@ spec:
         name: postgres-data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: gp3
+        storageClassName: gp3-v2
         resources:
           requests:
             storage: 10Gi

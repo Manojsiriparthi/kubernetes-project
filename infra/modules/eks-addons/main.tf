@@ -595,7 +595,11 @@ resource "terraform_data" "app_cleanup" {
     command     = <<-EOT
       export KUBECONFIG="$(mktemp)"
       aws eks update-kubeconfig --name "${self.input.cluster_name}" --region "${self.input.region}" >/dev/null
-      kubectl delete namespace school-demo --ignore-not-found --wait=true --timeout=15m
+      # Argo CD would recreate the namespaces, so remove its Applications first, then every school-demo* namespace.
+      kubectl delete applications.argoproj.io --all -n argocd --ignore-not-found --wait=false || true
+      for ns in $(kubectl get namespaces -o name | grep 'school-demo' || true); do
+        kubectl delete "$ns" --ignore-not-found --wait=true --timeout=15m
+      done
       rm -f "$KUBECONFIG"
     EOT
   }
