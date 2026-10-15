@@ -3,7 +3,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: school-demo-v1
+  namespace: school-demo
 spec:
   type: ClusterIP
   selector:
@@ -18,7 +18,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres-headless
-  namespace: school-demo-v1
+  namespace: school-demo
 spec:
   clusterIP: None
   selector:
@@ -33,7 +33,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
-  namespace: school-demo-v1
+  namespace: school-demo
 spec:
   serviceName: postgres-headless
   replicas: 1
@@ -122,7 +122,7 @@ spec:
         name: postgres-data
       spec:
         accessModes: ["ReadWriteOnce"]
-        storageClassName: gp3-v1
+        storageClassName: gp3
         resources:
           requests:
             storage: 10Gi

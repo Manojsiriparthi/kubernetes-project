@@ -3,7 +3,7 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: frontend
-  namespace: school-demo-v1
+  namespace: school-demo
 spec:
   minAvailable: 2
   selector:
@@ -15,7 +15,7 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: backend
-  namespace: school-demo-v1
+  namespace: school-demo
 spec:
   minAvailable: 2
   selector:

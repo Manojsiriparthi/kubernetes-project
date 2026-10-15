@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: school-config
-  namespace: school-demo-v1
+  namespace: school-demo
 data:
   POSTGRES_DB: school
   POSTGRES_USER: school_app
