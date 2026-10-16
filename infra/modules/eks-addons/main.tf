@@ -388,6 +388,8 @@ resource "helm_release" "argocd" {
   values = [
     yamlencode({
       global = {
+        # Empty domain makes the ingress rule host-less, so the raw ALB DNS name works (default is argocd.example.com).
+        domain       = ""
         nodeSelector = local.team_node_selector
         tolerations  = local.team_tolerations
       }
