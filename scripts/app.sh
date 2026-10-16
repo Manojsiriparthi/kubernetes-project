@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Local deploy of the school-demo app: no ECR push.
+# Deploy of the school-demo app.
 #   1) Deploy : build both images, set their names in kubernetes/backend.yaml and frontend.yaml, kubectl apply kubernetes/
+#               images are tagged and pushed to the ECR repositories created by infra.sh.
 #   2) Destroy: kubectl delete kubernetes/ (the namespace goes too)
-# The cluster must be able to see the local images: kind and minikube are handled below; an EKS cluster cannot pull them.
 # Usage: ./scripts/app.sh [1|2]
 set -euo pipefail
 
@@ -10,41 +10,37 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K8S_DIR="${REPO_ROOT}/kubernetes"
 PROJECT_NAME="${PROJECT_NAME:-school-demo}"
 NAMESPACE="school-demo"
+REGION="${AWS_REGION:-us-east-1}"
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 preflight() {
-  for tool in docker kubectl git; do
+  for tool in docker kubectl git aws; do
     command -v "${tool}" >/dev/null || die "'${tool}' is not installed."
   done
   kubectl version >/dev/null 2>&1 || die "kubectl cannot reach a cluster."
 }
 
 do_deploy() {
-  local tag backend_image frontend_image context
-  # A new tag per run makes Kubernetes roll out the new image.
+  local tag registry backend_image frontend_image
+  # Repositories are immutable, so every run needs a new tag.
   tag="$(date +%Y%m%d%H%M%S)-$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
-  backend_image="${PROJECT_NAME}-backend:${tag}"
-  frontend_image="${PROJECT_NAME}-frontend:${tag}"
+  registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${REGION}.amazonaws.com"
+  backend_image="${registry}/${PROJECT_NAME}-backend:${tag}"
+  frontend_image="${registry}/${PROJECT_NAME}-frontend:${tag}"
 
-  log "Building images"
-  docker build -t "${backend_image}" "${REPO_ROOT}/application/backend"
-  docker build -t "${frontend_image}" "${REPO_ROOT}/application/frontend"
+  log "Logging in to ECR (${registry})"
+  aws ecr get-login-password --region "${REGION}" | docker login --username AWS --password-stdin "${registry}"
 
-  # Local clusters run their own container runtime, so the images must be loaded into them.
-  context="$(kubectl config current-context)"
-  case "${context}" in
-    kind-*)
-      log "Loading images into kind"
-      kind load docker-image "${backend_image}" "${frontend_image}" --name "${context#kind-}"
-      ;;
-    minikube)
-      log "Loading images into minikube"
-      minikube image load "${backend_image}"
-      minikube image load "${frontend_image}"
-      ;;
-  esac
+  # EKS nodes are x86_64; build for that even on ARM machines.
+  log "Building and tagging images (${tag})"
+  docker build --platform linux/amd64 -t "${backend_image}" "${REPO_ROOT}/application/backend"
+  docker build --platform linux/amd64 -t "${frontend_image}" "${REPO_ROOT}/application/frontend"
+
+  log "Pushing images to ECR"
+  docker push "${backend_image}"
+  docker push "${frontend_image}"
 
   log "Updating the image names in kubernetes/backend.yaml and kubernetes/frontend.yaml"
   sed -i -E "s|image: [^[:space:]]*${PROJECT_NAME}-backend[^[:space:]]*|image: ${backend_image}|" "${K8S_DIR}/backend.yaml"
@@ -56,7 +52,9 @@ do_deploy() {
   kubectl apply -f "${K8S_DIR}/namespace.yaml"
   kubectl apply -f "${K8S_DIR}"
 
-  log "Done"
+  log "Waiting for the rollouts"
+  kubectl -n "${NAMESPACE}" rollout status deployment/backend --timeout=300s
+  kubectl -n "${NAMESPACE}" rollout status deployment/frontend --timeout=300s
   kubectl get pods -n "${NAMESPACE}"
 }
 
