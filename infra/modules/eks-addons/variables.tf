@@ -47,3 +47,8 @@ variable "team_certificate_arn" {
 variable "tags" {
   type = map(string)
 }
+
+variable "node_group_names" {
+  type        = map(string)
+  description = "Node group names; used to order node-dependent add-ons after the node groups."
+}

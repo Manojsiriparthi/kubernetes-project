@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prepares an Ubuntu/Debian CI host: Jenkins, Docker, SonarQube, Terraform, AWS CLI,
+# Prepares an Ubuntu/Debian (apt) or Amazon Linux (dnf/yum) CI host: Jenkins, Docker, SonarQube, Terraform, AWS CLI,
 # kubectl, Helm, Argo CD CLI, Trivy, Node.js, Python, JMeter and a Prometheus + Grafana stack.
 # Run with: sudo ./scripts/pre-tools.sh
 set -euo pipefail
@@ -26,10 +26,20 @@ fi
 
 # Load OS details (ID, VERSION_CODENAME) used to pick the right apt repositories.
 . /etc/os-release
+# PKG selects the package manager: apt on Ubuntu/Debian, dnf (or yum on Amazon Linux 2) on Amazon Linux.
 case "${ID}" in
-  ubuntu | debian) ;;
-  *) echo "Unsupported OS '${ID}'; this script supports Ubuntu and Debian." >&2; exit 1 ;;
+  ubuntu | debian) PKG=apt ;;
+  amzn) PKG=$(command -v dnf >/dev/null && echo dnf || echo yum) ;;
+  *) echo "Unsupported OS '${ID}'; this script supports Ubuntu, Debian and Amazon Linux." >&2; exit 1 ;;
 esac
+
+# Package helpers so each tool below is installed the same way on both families.
+pkg_refresh() { if [[ $PKG == apt ]]; then apt-get update -y; else "$PKG" makecache -y; fi; }
+pkg_install() { if [[ $PKG == apt ]]; then apt-get install -y "$@"; else "$PKG" install -y "$@"; fi; }
+# Writes a yum repo file: add_rpm_repo <name> <baseurl> <gpgkey-url>
+add_rpm_repo() {
+  printf '[%s]\nname=%s\nbaseurl=%s\nenabled=1\ngpgcheck=1\ngpgkey=%s\n' "$1" "$1" "$2" "$3" >"/etc/yum.repos.d/$1.repo"
+}
 
 # Map the CPU type to the names used in each vendor's download URLs.
 case "$(uname -m)" in
@@ -46,45 +56,87 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 install -m 0755 -d /etc/apt/keyrings
 
 log "Updating the system"
-apt-get update -y
-apt-get upgrade -y
-apt-get install -y ca-certificates curl gnupg lsb-release unzip tar jq apt-transport-https
+if [[ $PKG == apt ]]; then
+  # A Jenkins repo left by an earlier run still points at the old key and would fail the update below.
+  if [[ -f /etc/apt/sources.list.d/jenkins.list ]]; then
+    curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key -o /etc/apt/keyrings/jenkins-keyring.asc
+  fi
+  apt-get update -y
+  apt-get upgrade -y
+  apt-get install -y ca-certificates curl gnupg lsb-release unzip tar jq openssl apt-transport-https
+else
+  # curl is already present on Amazon Linux (curl-minimal); installing curl would conflict with it.
+  "$PKG" upgrade -y
+  pkg_install ca-certificates unzip tar jq openssl gzip
+fi
 
 # Each tool below is skipped if it is already installed, so the script is safe to re-run.
 log "Installing Docker"
 if ! command -v docker >/dev/null; then
-  # Add Docker's official apt repository, verified with its signing key.
-  curl -fsSL "https://download.docker.com/linux/${ID}/gpg" -o /etc/apt/keyrings/docker.asc
-  chmod a+r /etc/apt/keyrings/docker.asc
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
-    >/etc/apt/sources.list.d/docker.list
-  apt-get update -y
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  if [[ $PKG == apt ]]; then
+    # Add Docker's official apt repository, verified with its signing key.
+    curl -fsSL "https://download.docker.com/linux/${ID}/gpg" -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/${ID} ${VERSION_CODENAME} stable" \
+      >/etc/apt/sources.list.d/docker.list
+    apt-get update -y
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  else
+    pkg_install docker
+    # Amazon Linux's docker package has no compose plugin; install the release binary as a CLI plugin.
+    install -d /usr/local/lib/docker/cli-plugins
+    curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-${AWS_ARCH}" \
+      -o /usr/local/lib/docker/cli-plugins/docker-compose
+    chmod 0755 /usr/local/lib/docker/cli-plugins/docker-compose
+  fi
 fi
 systemctl enable --now docker
 
 # Jenkins needs a Java runtime; fontconfig is required for its web UI.
-log "Installing Jenkins (Java 17 + Jenkins LTS)"
+log "Installing Jenkins (Java 21 + Jenkins LTS)"
+# Current Jenkins supports only Java 21 and 25; installed outside the guard below so re-runs fix hosts that have Java 17.
+if [[ $PKG == apt ]]; then
+  apt-get install -y fontconfig openjdk-21-jre-headless
+  update-alternatives --set java "/usr/lib/jvm/java-21-openjdk-$(dpkg --print-architecture)/bin/java"
+else
+  pkg_install fontconfig java-21-amazon-corretto-headless
+fi
 if ! command -v jenkins >/dev/null && ! dpkg -s jenkins >/dev/null 2>&1; then
-  apt-get install -y fontconfig openjdk-17-jre
-  curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key -o /etc/apt/keyrings/jenkins-keyring.asc
-  echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" \
-    >/etc/apt/sources.list.d/jenkins.list
-  apt-get update -y
-  apt-get install -y jenkins
+  # The 2023 signing key has expired; Jenkins repos are now signed with the 2026 key.
+  if [[ $PKG == apt ]]; then
+    curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key -o /etc/apt/keyrings/jenkins-keyring.asc
+    echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" \
+      >/etc/apt/sources.list.d/jenkins.list
+  else
+    add_rpm_repo jenkins https://pkg.jenkins.io/redhat-stable https://pkg.jenkins.io/redhat-stable/jenkins.io-2026.key
+  fi
+  pkg_refresh
+  pkg_install jenkins
 fi
 # Lets Jenkins pipelines run docker commands; restart so the new group membership takes effect.
 usermod -aG docker jenkins
 systemctl enable jenkins
-systemctl restart jenkins
+# Clears the "start request repeated too quickly" state left by earlier failed starts.
+systemctl reset-failed jenkins || true
+if ! systemctl restart jenkins; then
+  echo "Jenkins failed to start. Java in use and the last log lines:" >&2
+  java -version >&2 || true
+  ss -ltnp 2>/dev/null | grep ':8080 ' >&2 || true
+  journalctl -u jenkins --no-pager -n 40 >&2
+  exit 1
+fi
 
 log "Installing Terraform"
 if ! command -v terraform >/dev/null; then
-  curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /etc/apt/keyrings/hashicorp.gpg
-  echo "deb [signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com ${VERSION_CODENAME} main" \
-    >/etc/apt/sources.list.d/hashicorp.list
-  apt-get update -y
-  apt-get install -y terraform
+  if [[ $PKG == apt ]]; then
+    curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /etc/apt/keyrings/hashicorp.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com ${VERSION_CODENAME} main" \
+      >/etc/apt/sources.list.d/hashicorp.list
+  else
+    add_rpm_repo hashicorp https://rpm.releases.hashicorp.com/AmazonLinux/\$releasever/\$basearch/stable https://rpm.releases.hashicorp.com/gpg
+  fi
+  pkg_refresh
+  pkg_install terraform
 fi
 
 # The AWS CLI is not in apt; download the official installer. --update makes re-runs safe.
@@ -95,11 +147,15 @@ unzip -q "${TMP_DIR}/awscliv2.zip" -d "${TMP_DIR}"
 
 log "Installing kubectl ${KUBECTL_MINOR}"
 if ! command -v kubectl >/dev/null; then
-  curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBECTL_MINOR}/deb/Release.key" | gpg --dearmor -o /etc/apt/keyrings/kubernetes.gpg
-  echo "deb [signed-by=/etc/apt/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/${KUBECTL_MINOR}/deb/ /" \
-    >/etc/apt/sources.list.d/kubernetes.list
-  apt-get update -y
-  apt-get install -y kubectl
+  if [[ $PKG == apt ]]; then
+    curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBECTL_MINOR}/deb/Release.key" | gpg --dearmor -o /etc/apt/keyrings/kubernetes.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/${KUBECTL_MINOR}/deb/ /" \
+      >/etc/apt/sources.list.d/kubernetes.list
+  else
+    add_rpm_repo kubernetes "https://pkgs.k8s.io/core:/stable:/${KUBECTL_MINOR}/rpm/" "https://pkgs.k8s.io/core:/stable:/${KUBECTL_MINOR}/rpm/repodata/repomd.xml.key"
+  fi
+  pkg_refresh
+  pkg_install kubectl
 fi
 
 # Helm and the Argo CD CLI are single binaries; each download is checked against its published SHA-256.
@@ -126,25 +182,38 @@ fi
 # Tools the Jenkins pipeline (jenkins/Jenkinsfile.groovy) runs on this host: Trivy, Node.js, Python, JMeter.
 log "Installing Trivy (image and filesystem scanner)"
 if ! command -v trivy >/dev/null; then
-  curl -fsSL https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /etc/apt/keyrings/trivy.gpg
-  echo "deb [signed-by=/etc/apt/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
-    >/etc/apt/sources.list.d/trivy.list
-  apt-get update -y
-  apt-get install -y trivy
+  if [[ $PKG == apt ]]; then
+    curl -fsSL https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /etc/apt/keyrings/trivy.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
+      >/etc/apt/sources.list.d/trivy.list
+  else
+    # Trivy has no Amazon Linux repo path; its static binary works from the RHEL 9 one.
+    add_rpm_repo trivy https://aquasecurity.github.io/trivy-repo/rpm/releases/9/\$basearch/ https://aquasecurity.github.io/trivy-repo/rpm/public.key
+  fi
+  pkg_refresh
+  pkg_install trivy
 fi
 
 log "Installing Node.js 20 (npm install, npm audit, frontend tests)"
 if ! command -v node >/dev/null; then
-  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-  echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
-    >/etc/apt/sources.list.d/nodesource.list
-  apt-get update -y
-  apt-get install -y nodejs
+  if [[ $PKG == apt ]]; then
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" \
+      >/etc/apt/sources.list.d/nodesource.list
+  else
+    add_rpm_repo nodesource https://rpm.nodesource.com/pub_20.x/nodistro/nodejs/\$basearch https://rpm.nodesource.com/gpgkey/ns-operations-public.key
+  fi
+  pkg_refresh
+  pkg_install nodejs
 fi
 
 # The pipeline creates a virtualenv per build, so only python3, pip and venv are needed here.
 log "Installing Python 3 (backend tests, pip-audit)"
-apt-get install -y python3 python3-pip python3-venv
+if [[ $PKG == apt ]]; then
+  apt-get install -y python3 python3-pip python3-venv
+else
+  pkg_install python3 python3-pip
+fi
 
 log "Installing JMeter ${JMETER_VERSION} (load tests; uses the Java installed for Jenkins)"
 if [[ ! -x /opt/jmeter/bin/jmeter ]]; then

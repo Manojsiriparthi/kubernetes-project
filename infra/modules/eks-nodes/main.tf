@@ -151,6 +151,10 @@ resource "aws_launch_template" "nodes" {
   tags = merge(var.tags, { Name = "${var.project_name}-${each.key}-launch-template" })
 }
 
+resource "terraform_data" "network_addons_gate" {
+  input = var.network_addons_ready
+}
+
 # The node groups themselves; desired size is ignored after creation so the autoscaler can change it.
 resource "aws_eks_node_group" "workers" {
   for_each = local.groups
@@ -196,7 +200,7 @@ resource "aws_eks_node_group" "workers" {
     "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
   })
 
-  depends_on = [aws_iam_role_policy_attachment.nodes]
+  depends_on = [aws_iam_role_policy_attachment.nodes, terraform_data.network_addons_gate]
 
   lifecycle {
     ignore_changes = [scaling_config[0].desired_size]
