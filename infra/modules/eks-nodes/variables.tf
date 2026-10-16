@@ -63,3 +63,9 @@ variable "node_volume_size_gib" {
 variable "tags" {
   type = map(string)
 }
+
+variable "network_addons_ready" {
+  type        = list(string)
+  default     = []
+  description = "IDs of vpc-cni and kube-proxy add-ons; node groups are created only after they exist."
+}

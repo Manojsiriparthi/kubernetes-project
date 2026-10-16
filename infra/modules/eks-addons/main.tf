@@ -222,6 +222,11 @@ resource "aws_eks_addon" "kube_proxy" {
   tags = var.tags
 }
 
+# Node-dependent add-ons (coredns, ebs-csi, cloudwatch) wait for the node groups to be ACTIVE.
+resource "terraform_data" "nodes_gate" {
+  input = var.node_group_names
+}
+
 resource "aws_eks_addon" "coredns" {
   cluster_name                = var.cluster_name
   addon_name                  = "coredns"
@@ -229,7 +234,7 @@ resource "aws_eks_addon" "coredns" {
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "PRESERVE"
 
-  depends_on = [aws_eks_addon.vpc_cni, aws_eks_addon.kube_proxy]
+  depends_on = [aws_eks_addon.vpc_cni, aws_eks_addon.kube_proxy, terraform_data.nodes_gate]
 
   tags = var.tags
 }
@@ -627,4 +632,9 @@ output "addon_names" {
     aws_eks_addon.ebs_csi,
     aws_eks_addon.cloudwatch,
   ] : addon.addon_name]
+}
+
+# vpc-cni and kube-proxy must exist before nodes start, otherwise nodes never turn Ready.
+output "network_addons_ready" {
+  value = [aws_eks_addon.vpc_cni.id, aws_eks_addon.kube_proxy.id]
 }

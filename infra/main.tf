@@ -54,6 +54,7 @@ module "eks_nodes" {
   database_node_group     = var.database_node_group
   node_volume_size_gib    = var.node_volume_size_gib
   tags                    = local.common_tags
+  network_addons_ready    = module.eks_addons.network_addons_ready
 
   depends_on = [module.networking, module.eks_cluster]
 }
@@ -75,8 +76,8 @@ module "eks_addons" {
   alertmanager_slack_webhook_url = var.alertmanager_slack_webhook_url
   tags                = local.common_tags
 
-  # Add-ons like coredns and ebs-csi need running nodes to become ACTIVE.
-  depends_on = [module.eks_nodes]
+  # coredns and ebs-csi need running nodes to become ACTIVE.
+  node_group_names = module.eks_nodes.node_group_names
 }
 
 # Private ECR repositories for the application images (tags are immutable, scanned on push).
