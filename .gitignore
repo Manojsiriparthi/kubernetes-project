@@ -20,3 +20,4 @@ node_modules/
 .pytest_cache/
 .coverage
 .sonar/
+demo-output/
