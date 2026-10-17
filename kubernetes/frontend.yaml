@@ -20,7 +20,7 @@ metadata:
   name: frontend
   namespace: school-demo
 spec:
-  replicas: 3
+  replicas: 2
   strategy:
     rollingUpdate:
       maxSurge: 1
