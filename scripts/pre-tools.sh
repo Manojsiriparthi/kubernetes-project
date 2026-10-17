@@ -179,7 +179,7 @@ if ! command -v argocd >/dev/null; then
   install -m 0755 "${TMP_DIR}/argocd" /usr/local/bin/argocd
 fi
 
-# Tools the Jenkins pipeline (jenkins/Jenkinsfile.groovy) runs on this host: Trivy, Node.js, Python, JMeter.
+# Tools the Jenkins pipeline (jenkins/Jenkinsfile.*.groovy) runs on this host: Trivy, Node.js, Python, JMeter.
 log "Installing Trivy (image and filesystem scanner)"
 if ! command -v trivy >/dev/null; then
   if [[ $PKG == apt ]]; then

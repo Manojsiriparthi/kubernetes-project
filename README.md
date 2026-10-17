@@ -90,7 +90,7 @@ infra/          Terraform: networking, EKS cluster, node groups, add-ons
 kubernetes/     manifests deployed by Argo CD
 application/    frontend and backend source code and Dockerfiles
 tests/          smoke, integration and JMeter load tests
-jenkins/        Jenkinsfile.groovy and its helper scripts
+jenkins/        the three pipelines: Jenkinsfile.frontend.groovy, Jenkinsfile.backend.groovy (CI), Jenkinsfile.cd.groovy (CD)
 argocd/         the Argo CD Application (repository URL, branch, folder)
 scripts/        pre-tools.sh (install tools) and infra.sh (create or destroy)
 docs/           the step-by-step guides; docs/images/ holds the architecture picture
