@@ -64,7 +64,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: backend
-          image: 513263709619.dkr.ecr.us-east-1.amazonaws.com/school-demo-backend:2
+          image: 513263709619.dkr.ecr.us-east-1.amazonaws.com/school-demo-backend:4
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

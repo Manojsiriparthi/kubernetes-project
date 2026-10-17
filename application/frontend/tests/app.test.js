@@ -57,6 +57,7 @@ test("lookup renders the student card with marks", async () => {
   assert.match(result.textContent, /SCI-2026-00101/);
   assert.match(result.textContent, /Total 457\/500/);
   assert.equal(result.querySelectorAll(".mark-chip").length, 5);
+  assert.equal(result.querySelectorAll(".mark-bar").length, 5);
 });
 
 test("lookup shows a friendly message when nothing matches", async () => {
