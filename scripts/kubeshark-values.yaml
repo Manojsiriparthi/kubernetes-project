@@ -1,0 +1,65 @@
+tap:
+  nodeSelectorTerms:
+    hub:
+      - matchExpressions:
+          - key: kubernetes.io/os
+            operator: In
+            values:
+              - linux
+          - key: workload
+            operator: In
+            values:
+              - application
+    workers:
+      - matchExpressions:
+          - key: kubernetes.io/os
+            operator: In
+            values:
+              - linux
+          - key: workload
+            operator: In
+            values:
+              - application
+    front:
+      - matchExpressions:
+          - key: kubernetes.io/os
+            operator: In
+            values:
+              - linux
+          - key: workload
+            operator: In
+            values:
+              - application
+    dex:
+      - matchExpressions:
+          - key: kubernetes.io/os
+            operator: In
+            values:
+              - linux
+          - key: workload
+            operator: In
+            values:
+              - application
+  tolerations:
+    hub:
+      - key: workload
+        operator: Equal
+        value: application
+        effect: NoSchedule
+    workers:
+      - operator: Exists
+        effect: NoExecute
+      - key: workload
+        operator: Equal
+        value: application
+        effect: NoSchedule
+    front:
+      - key: workload
+        operator: Equal
+        value: application
+        effect: NoSchedule
+    dex:
+      - key: workload
+        operator: Equal
+        value: application
+        effect: NoSchedule
