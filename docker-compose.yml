@@ -40,7 +40,7 @@ services:
 
   frontend:
     # The Jenkins pipeline rewrites this image name to the ECR image it just pushed.
-    image: 513263709619.dkr.ecr.us-east-1.amazonaws.com/school-demo-frontend:4
+    image: 513263709619.dkr.ecr.us-east-1.amazonaws.com/school-demo-frontend:8
     build:
       context: ./application/frontend
     ports:
