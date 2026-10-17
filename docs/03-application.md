@@ -165,7 +165,7 @@ kubectl exec -it postgres-0 -n school-demo -- sh -c 'psql -U "$POSTGRES_USER" -d
 | Smoke test | `tests/smoke/smoke_test.sh` | home page, API through the proxy, database reachable, seeded student found | yes |
 | Integration tests | `tests/integration/test_api.py` | register then look up a student, case-insensitive lookup, errors | yes |
 | Load test | `tests/jmeter/load-test.jmx` | 10 users x 20 loops on the page, health and lookup; fails on any error | yes |
-| SAST (SonarQube) | `sonar-project.properties` | code quality and security smells | no |
+| SAST (SonarQube) | `jenkins/Jenkinsfile.frontend.groovy`, `jenkins/Jenkinsfile.backend.groovy` | code quality and security smells | no |
 | DAST (OWASP ZAP) | pipeline stage | attacks the running site from outside (passive scan) | yes |
 
 The pipeline (doc 05) runs all of them in a good order.

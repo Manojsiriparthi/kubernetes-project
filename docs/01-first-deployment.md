@@ -78,7 +78,7 @@ an IAM role to the server (EC2 console, Instance, Actions, Security, Modify IAM 
     { "Effect": "Allow",
       "Action": ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart",
                  "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage", "ecr:DescribeImages",
-                 "ecr:DescribeImageScanFindings", "ecr:DescribeRepositories"],
+                 "ecr:DescribeImageScanFindings", "ecr:DescribeRepositories", "ecr:CreateRepository"],
       "Resource": "arn:aws:ecr:us-east-1:*:repository/school-demo-*" },
     { "Effect": "Allow", "Action": ["s3:PutObject"], "Resource": "arn:aws:s3:::YOUR_BUCKET/artifacts/*" }
   ]
@@ -109,7 +109,7 @@ That name contains the AWS account number `513263709619`. **If your account numb
 (bucket names are global, so it must be unique), then change it in two places:
 
 1. `infra/backend.tf`, the `bucket = "..."` line.
-2. `jenkins/Jenkinsfile.groovy`, the `ARTIFACT_BUCKET = '...'` line.
+2. `jenkins/Jenkinsfile.frontend.groovy`, `jenkins/Jenkinsfile.backend.groovy` and `jenkins/Jenkinsfile.cd.groovy`, the `ARTIFACT_BUCKET = '...'` line in each.
 
 Also replace `513263709619` in the image lines of `kubernetes/backend.yaml` and `kubernetes/frontend.yaml` (the
 Jenkins pipeline rewrites those lines later, but the first value must be a real ECR address).
@@ -258,45 +258,89 @@ Open `http://<jenkins-server-public-ip>:8080` (open port 8080 in the server's se
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ```
 
-Paste the password, choose **Install suggested plugins**, then create your admin user.
+Paste the password into the unlock page, click **Continue**, then select **Install suggested plugins**. Wait for the
+install to finish, create your Jenkins admin user, and click **Save and Finish**.
 
-### 7.2 Plugins (Manage Jenkins > Plugins > Available plugins)
+### 7.2 Install/check the plugins
 
-The pipeline only needs these (most are already in "suggested plugins"). Install any that are missing:
+The suggested install usually includes what the pipeline needs. To check or add a plugin:
 
-| Plugin | Why the pipeline needs it |
-|---|---|
-| Pipeline | runs the Groovy pipeline file |
-| Git | checks out the repository |
-| Credentials Binding | hands passwords/tokens to the pipeline safely |
-| Timestamper | `timestamps()` adds the time to every log line |
-| JUnit | shows test results |
-| Pipeline: Stage View (optional) | shows the coloured stage boxes |
+1. In Jenkins, open **Manage Jenkins** > **Plugins** > **Available plugins**.
+2. Search for each plugin below. Select it only if it is not already installed.
+3. Click **Install** (or **Install and restart Jenkins** if Jenkins asks for a restart).
+4. If you installed plugins without restarting, restart Jenkins from **Manage Jenkins** when prompted.
 
-No Slack plugin is needed: the pipeline sends the Slack message with a simple web call.
+| Search for this plugin | Plugin ID | Required? | What it does |
+|---|---|---|---|
+| Pipeline | `workflow-aggregator` | Yes | Runs the Jenkinsfile pipeline |
+| Git | `git` | Yes | Checks out the repository |
+| Credentials Binding | `credentials-binding` | Yes | Makes tokens available to pipeline steps securely |
+| Timestamper | `timestamper` | Yes | Provides the `timestamps()` pipeline option |
+| JUnit | `junit` | Yes | Publishes test results |
+| Pipeline: Stage View | `pipeline-stage-view` | Optional | Shows the pipeline stages visually |
 
-### 7.3 Credentials (Manage Jenkins > Credentials > System > Global > Add Credentials)
+**Plugin versions:** do not type a version number. Jenkins Update Center selects the newest version compatible with
+your installed Jenkins. This project does not pin plugin versions. If Jenkins reports a dependency, allow it to install
+the required dependencies too.
 
-Create three credentials of kind **Secret text**. The ID must be exactly as written:
+No Slack plugin is needed: the pipeline sends the Slack message with a simple web call. You also do not need the
+Jenkins NodeJS or Python plugins: the pipeline uses programs installed on the server and available on its `PATH`.
+
+### 7.3 Tools and versions on the Jenkins server
+
+These are server programs, **not Jenkins plugins**. `scripts/pre-tools.sh` installs them; there is no need to add them
+under **Manage Jenkins > Tools** for this pipeline.
+
+| Tool | Version this project requests | Used for |
+|---|---|---|
+| Java | 21 | Runs Jenkins |
+| Node.js | 20.x | Frontend tests and `npm audit` |
+| Python | Python 3 from the server OS (minor version is not pinned) | Backend tests and `pip-audit` |
+| Apache JMeter | 5.6.3 | Load tests |
+| Helm | 3.18.4 | Kubernetes package management |
+| Jenkins | LTS from the Jenkins package repository (exact release is not pinned) | Runs the pipeline |
+| Docker, Terraform, AWS CLI, `kubectl`, Argo CD CLI, Trivy | Installed by the setup script; exact releases are not pinned | Build, scan, and cloud/Kubernetes operations |
+
+Node.js installation is skipped if `node` is already present, so check that it is version 20 before running the job.
+To verify the actual versions on the server, run:
+
+```bash
+java -version
+node --version
+npm --version
+python3 --version
+docker --version
+docker compose version
+jmeter --version
+trivy --version
+```
+
+If Node.js is not version 20, install Node.js 20 on the server and restart Jenkins so the Jenkins service picks up the
+correct `PATH`.
+
+### 7.4 Add Jenkins credentials (Manage Jenkins > Credentials > System > Global credentials)
+
+For each credential, click **Add Credentials**, choose **Kind: Secret text**, paste the secret into **Secret**, enter the
+ID exactly as shown, then click **Create**:
 
 | ID | Secret | How to get it |
 |---|---|---|
-| `github-token` | a GitHub token | GitHub, Settings, Developer settings, Fine-grained tokens. Repository access: this repo. Permissions: **Contents: Read and write**, **Pull requests: Read and write** |
-| `sonar-token` | a SonarQube token | SonarQube (Step 7.4), top right icon, My Account, Security, Generate token |
-| `slack-webhook` | the Slack webhook URL | https://api.slack.com/apps, Create app, Incoming Webhooks, Add new webhook to a channel, copy the URL |
+| `GITHUB` (Username with password) | a GitHub token as the password | GitHub, Settings, Developer settings, Fine-grained tokens. Repository access: this repo. Permissions: **Contents: Read and write**, **Pull requests: Read and write** |
+| `sonar-cred` | a SonarQube token | SonarQube (Step 7.4), top right icon, My Account, Security, Generate token |
+| `slack-token` | Slack app token | Slack Notification plugin: Manage Jenkins > System > Slack, workspace + this credential, channel `#devops-notifications` |
 
 AWS needs no credential here: the server's IAM role (Step 1) is used.
 
-### 7.4 SonarQube
+### 7.5 SonarQube
 
 1. Open `http://<jenkins-server-public-ip>:9000`.
 2. Log in with `admin` / `admin`, then change the password when asked.
-3. Create the token for `sonar-token` (table above).
-4. You do not need to create the project: it appears on the first scan using the key `school-demo`
-   (from [sonar-project.properties](../sonar-project.properties)).
+3. Create the token for `sonar-cred` (table above).
+4. You do not need to create the projects: `school-demo-frontend` and `school-demo-backend` appear on the first scan
+(the keys are set in the two CI Jenkinsfiles).
 5. The pipeline waits for the "Quality Gate" result (default gate: "Sonar way"). If the gate fails, the build fails.
 
-### 7.5 ECR login
+### 7.6 ECR login
 
 Nothing to configure: the pipeline logs in to ECR itself with
 `aws ecr get-login-password ... | docker login`, using the server's IAM role. To test by hand:
@@ -307,34 +351,44 @@ sudo -u jenkins bash -c 'aws ecr get-login-password --region us-east-1 | docker 
 
 You should see `Login Succeeded`.
 
-### 7.6 Check the values at the top of the pipeline file
+### 7.7 Jenkins tool and server settings the pipelines expect
 
-Open `jenkins/Jenkinsfile.groovy`, the `environment { ... }` block:
+The three Jenkinsfiles use these names (Manage Jenkins > Tools / System). Create them with exactly these names:
 
-```groovy
-AWS_REGION      = 'us-east-1'
-PROJECT_NAME    = 'school-demo'                 // ECR repositories are school-demo-frontend and school-demo-backend
-ARTIFACT_BUCKET = 'school-demo-terraform-state-513263709619-us-east-1'   // your bucket from Step 2
-```
+| Where | Name | Value |
+|---|---|---|
+| Tools > NodeJS (frontend job only) | `nodejs` | Node.js 20 |
+| Tools > SonarQube Scanner | `sonarqube` | install automatically |
+| Tools > Dependency-Check | `DP-Check` | install from github.com |
+| System > SonarQube servers | `sonar-server` | `http://localhost:9000` + the `sonar-cred` credential |
 
-### 7.7 Create the job
+Extra plugins for these pipelines: **SonarQube Scanner**, **OWASP Dependency-Check**, **Slack Notification**
+(Slack channel `#devops-notifications`, set up under Manage Jenkins > System > Slack).
+Extra credential: `GITHUB` (Username with password: your GitHub user and token). It is used for checkout, push and the pull request. `jq`, `trivy`, `python3` and `jmeter` come from
+`pre-tools.sh`.
 
-1. Jenkins home, **New Item**, name `school-demo`, type **Pipeline**.
-2. Under **Pipeline**: Definition = **Pipeline script from SCM**, SCM = **Git**.
-3. Repository URL = `https://github.com/Manojsiriparthi/kubernetes-project`.
-4. Branch Specifier = `*/release/version1`.
-5. Script Path = `jenkins/Jenkinsfile.groovy`.
-6. Save.
+Check the `environment { ... }` block at the top of each Jenkinsfile (`AWS_DEFAULT_REGION`, `ARTIFACT_BUCKET`, `GIT_REPO`).
+
+### 7.8 Create the three jobs
+
+For each row: Jenkins home, **New Item**, type **Pipeline**, Definition = **Pipeline script from SCM**, SCM = **Git**,
+Repository URL = `https://github.com/Manojsiriparthi/kubernetes-project`, Branch Specifier = `*/release/version1`.
+
+| Job name | Script Path | What it does |
+|---|---|---|
+| `school-demo-frontend-ci` | `jenkins/Jenkinsfile.frontend.groovy` | test, scan, build and push the frontend image, update `docker-compose.yml` |
+| `school-demo-backend-ci` | `jenkins/Jenkinsfile.backend.groovy` | same for the backend |
+| `school-demo-cd` | `jenkins/Jenkinsfile.cd.groovy` | run the new images with docker compose, test, update `kubernetes/*.yaml`, raise the pull request |
 
 ---
 
 ## Step 8 - Run the pipeline for version 1
 
-1. Click **Build Now** (the first build uses the default parameters from the file: it builds `release/version1`
-   and opens the pull request into `main`).
-2. Open the build, **Console Output**, and watch the stages (19 of them, explained in doc 05). It takes 20-40 minutes the first
-   time (downloads scanner databases).
-3. When it finishes, Slack gets a message with the pull request link, and the job page lists the reports.
+1. Run `school-demo-frontend-ci` and `school-demo-backend-ci` (**Build with Parameters**, default branch
+   `release/version1`). Each one pushes its new image name into `docker-compose.yml` on that branch.
+2. When both are green, run `school-demo-cd`. It tests both images together and opens the pull request into `main`.
+3. Watch **Console Output**. The first run takes 20-40 minutes (downloads scanner databases). Slack gets a message
+   when each pipeline ends; the CD message contains the pull request link.
 
 ### Merge the pull request into main
 
@@ -469,4 +523,4 @@ behind. The S3 bucket from Step 2 is not deleted (delete it by hand if you want)
 | Pod `ImagePullBackOff` | the image tag is not in ECR yet: run the Jenkins pipeline so it pushes the images |
 | Argo CD `ComparisonError` / path not found | `main` is still empty: merge the first pull request |
 | Team tool page does not open | your current IP is not in `team_access_cidrs`; wait a few minutes after creation |
-| Jenkins build fails at SonarQube | wrong `sonar-token`, or SonarQube still starting (wait, check `docker ps`) |
+| Jenkins build fails at SonarQube | wrong `sonar-cred`, or SonarQube still starting (wait, check `docker ps`) |
